@@ -102,6 +102,9 @@ class GedcomParser:
             verbose=verbose,
             location_cache_file=location_cache_file,
         )
+        
+    def close(self):
+        self.geocode_lookup.close()
 
     def get_place(record: Record, placetag = 'PLAC'):
         place_value = None

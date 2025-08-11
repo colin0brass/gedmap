@@ -1,17 +1,11 @@
 import os
 import re
 import csv
-# import time
 
 import argparse
 import tempfile
 
-from collections import Counter
 from ged4py.parser import GedcomReader
-# from ged4py.model import Individual
-
-# import pycountry
-from geopy.geocoders import Nominatim
 
 from geocode import Geocode
 
@@ -30,6 +24,8 @@ parser.add_argument('--always-geocode', action='store_true',
     help='always geocode, ignore cache')
 parser.add_argument('--geo_cache_filename', type=str, default='geo_cache.csv',
     help='geo-location cache filename to use, defaults to geo_cache.csv')
+parser.add_argument('--full_place_summary', action='store_true',
+    help='save full place summary')
 parser.add_argument('--verbose', action='store_true',
     help='verbose output')
 
@@ -89,7 +85,6 @@ def fix_gedcom_conc_cont_levels(input_path):
     temp_fd, temp_path = tempfile.mkstemp(suffix='.ged')
     os.close(temp_fd)
 
-    # last_level = None
     cont_level = None
 
     with open(input_path, 'r', encoding='utf-8', newline='') as infile, \
@@ -108,7 +103,6 @@ def fix_gedcom_conc_cont_levels(input_path):
                 fixed_level = cont_level if cont_level is not None else level
                 outfile.write(f"{fixed_level} {tag}{rest}\n")
             else:
-                # last_level = level
                 cont_level = level + 1
                 outfile.write(raw)
     return temp_path
@@ -132,12 +126,14 @@ def ged_to_kml(args, fixed_gedcom_file):
         main_person_id = list(people.keys())[0]
         print ("Using starting person: {} ({})".format(people[main_person_id].name, main_person_id))
 
-        kml_life_lines_creator = KML_Life_Lines_Creator(kml_file, people, main_person_id=main_person_id, verbose=args.verbose)
+        kml_life_lines_creator = KML_Life_Lines_Creator(kml_file, people, verbose=args.verbose)
         kml_life_lines_creator.add_default_location_if_unknown(main_person_id)
         kml_life_lines_creator.add_people()
-        # if args.story_type == 'parents':
         kml_life_lines_creator.connect_parents()
+        # kml_life_lines_creator.lookat_person(main_person_id)
         kml_life_lines_creator.save_kml()
+
+    gedcom_parser.close() # give chance for wrap-up, including saving any cached locations
 
 def main():
     args = parser.parse_args()
@@ -148,23 +144,16 @@ def main():
     base_file_name = os.path.splitext(os.path.basename(args.input_file))[0]
     output_file = os.path.join(path_dir, f"{base_file_name}_places.csv")
 
-    # Pre-process GEDCOM to fix CONC/CONT levels
     print('Fixing CONC/CONT levels in GEDCOM file:', args.input_file)
     fixed_gedcom_file = fix_gedcom_conc_cont_levels(args.input_file)
-
-    print('Locating all places in GEDCOM file:', fixed_gedcom_file)
-    counts = locate_all_places(args, fixed_gedcom_file)
-    write_places_to_csv(counts, output_file)
 
     print('Writing KML file...')
     ged_to_kml(args, fixed_gedcom_file)
 
-    # print a summary (top 20)
-    if args.verbose:
-        # Sort by count descending, then by place name
-        top_places = sorted(counts.items(), key=lambda x: (-x[1]['count'], x[0]))[:20]
-        for place, data in top_places:
-            print(f"{data['count']:5d}  {place}")
+    if args.full_place_summary:
+        print(f"Writing full place summary to {output_file}")
+        counts = locate_all_places(args, fixed_gedcom_file)
+        write_places_to_csv(counts, output_file)
 
 if __name__ == "__main__":
     main()

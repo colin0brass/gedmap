@@ -2,60 +2,27 @@ import os
 import csv
 import time
 import pycountry
+import yaml  # Add PyYAML to your requirements if not already present
 from geopy.geocoders import Nominatim
 
 from lat_lon import LatLon
 
 class Geocode:
-    # GeoPy uses ISO-3166-1 alpha-2, which combines England/Scotland/Wales as GB
-    additional_countries_to_add = ['England',
-                                   'Scotland',
-                                   'Wales',
-                                   'Great Britain',
-                                   'Prussia',
-                                   'USA',
-                                   'West Indies',
-                                   'Europe']
-    additional_countries_codes_dict_to_add = {'England':'GB',
-                                              'Scotland':'GB',
-                                              'Wales':'GB',
-                                              'Great Britain':'GB',
-                                              'Prussia':'DE',
-                                              'USA':'US',
-                                              'West Indies':'WI',
-                                              'Europe':'EU',}
-    country_substitutions = {'Prussia':'Germany',
-                             'American Colonies':'USA',
-                             'Deutschland':'Germany',
-                             'Rhodesia':'Zimbabwe',
-                             'Czechoslovakia':'Czech Republic',
-                             'Yugoslavia':'Serbia',
-                             'British West Indies':'West Indies',
-                             'Holland':'Netherlands',
-                             'Vietnam':'Viet Nam',
-                             'Allemagne':'Germany',
-                             'Western Europe':'Europe',
-                             'Western European Theatre':'Europe',
-                             'Nyasaland':'Malawi',
-                             'Ukamba':'Kenya',
-                             'Burma':'Myanmar',
-                             'Bavaria':'Germany',
-                             'Northern Ireland': 'United Kingdom',
-                             'Turkey':'Türkiye',
-                             'Palestine':'Palestine, State of',
-                             'France and Flanders':'Belgium',
-                             'Himalayas':'Bhutan'}
-    default_country = 'England'
-    # American Colonies
-    # American Colonies
-
     gecode_sleep_interval = 1 # insert a delay due to low request limit of free Nominatim service
 
-    def __init__(self, cache_file, default_country=default_country, always_geocode=False, verbose=False, location_cache_file=None):
+    def __init__(self, cache_file, default_country=None, always_geocode=False, verbose=False, location_cache_file=None):
         self.always_geocode = always_geocode
-        self.default_country = default_country
         self.verbose = verbose
         self.location_cache_file = location_cache_file
+
+        # Load country info from geocode.yaml
+        with open(os.path.join(os.path.dirname(__file__), "geocode.yaml"), "r") as f:
+            geo_config = yaml.safe_load(f)
+
+        self.additional_countries_codes_dict_to_add = geo_config.get('additional_countries_codes_dict_to_add', {})
+        self.additional_countries_to_add = list(self.additional_countries_codes_dict_to_add.keys())
+        self.country_substitutions = geo_config.get('country_substitutions', {})
+        self.default_country = default_country or geo_config.get('default_country', 'England')
 
         self.address_cache = {}
         self.read_address_cache()
@@ -123,7 +90,7 @@ class Geocode:
         for key in self.country_substitutions:
             if last_place_element.lower() == key.lower():
                 new_country = self.country_substitutions[key]
-                print(f"Substituting country '{last_place_element}' with '{new_country}' in place '{place}'")
+                if self.verbose: print(f"Substituting country '{last_place_element}' with '{new_country}' in place '{place}'")
                 place = place.replace(last_place_element, new_country)
                 country_name = new_country
                 found = True

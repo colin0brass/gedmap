@@ -1,4 +1,5 @@
 from typing import Dict
+import datetime
 
 import simplekml as simplekml
 
@@ -7,6 +8,8 @@ from gedcom import Person
 
 class KmlExporter:
     line_width = 2
+    timespan_default_start_year = 1950
+    timespan_default_range_years = 100
 
     def __init__(self, kml_file):
         self.kml_file = kml_file
@@ -51,6 +54,15 @@ class KmlExporter:
             kml_line.style.linestyle.color  = colour
             kml_line.style.linestyle.width  = self.line_width
         return kml_line.id
+    
+    def lookat(self, lat_lon: LatLon, begin_year: int, end_year: int, altitude=0, range=1000, heading=0, tilt=0):
+        if lat_lon.lat is not None and lat_lon.lon is not None:
+            lookat = simplekml.LookAt(
+                latitude=lat_lon.lat, longitude=lat_lon.lon,
+                altitude=altitude, range=range,
+                heading=heading, tilt=tilt
+            )
+            self.kml.document.lookat = lookat # default lookat
 
 class KML_Life_Lines_Creator:
     # place_type_list = {'native':'native'}
@@ -226,6 +238,15 @@ class KML_Life_Lines_Creator:
                         line_id = self.kml_instance.draw_line(line_name, person.lat_lon, mother.lat_lon,
                                         begin_date, end_date,
                                         simplekml.Color.red)
+
+    def lookat_person(self, person_id: str):
+        if person_id in self.people.keys():
+            person = self.people[person_id]
+            if person.lat_lon and person.lat_lon.lat is not None:
+                lat_lon = person.lat_lon
+                begin_year = person.birth.when_year() if person.birth and person.birth.when else None
+                end_year = person.death.when_year() if person.death and person.death.when else None
+                self.kml_instance.lookat(lat_lon=lat_lon, begin_year=begin_year, end_year=end_year)
 
     def save_kml(self):
 #         print('Save KML')
