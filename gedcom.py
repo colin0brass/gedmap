@@ -89,20 +89,18 @@ class Person:
 class GedcomParser:
     default_country = 'England'
 
-    def __init__(self, gedcom_file=None, default_country=default_country, always_geocode=False, verbose=False, location_cache_file=None, always_write_cache=False):
+    def __init__(self, gedcom_file=None, default_country=default_country, always_geocode=False, verbose=False, location_cache_file=None):
         self.gedcom_file = gedcom_file
         self.always_geocode = always_geocode
         self.default_country = default_country
         self.verbose = verbose
         self.location_cache_file = location_cache_file
-        self.always_write_cache = always_write_cache
         self.geocode_lookup = Geocode(
             cache_file=location_cache_file,
             default_country=default_country,
             always_geocode=always_geocode,
             verbose=verbose,
             location_cache_file=location_cache_file,
-            always_write_cache=always_write_cache
         )
 
     def get_place(record: Record, placetag = 'PLAC'):

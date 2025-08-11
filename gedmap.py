@@ -28,10 +28,6 @@ parser.add_argument('--default_country', type=str, default=default_country,
     help='Default country for geocoding, or "none" to disable')
 parser.add_argument('--always-geocode', action='store_true',
     help='always geocode, ignore cache')
-parser.add_argument('--always-write-cache', action='store_true',
-    help='always write cache, even if no geocoding was done')
-parser.add_argument('--write_kml', action='store_true',
-    help='write KML file')
 parser.add_argument('--geo_cache_filename', type=str, default='geo_cache.csv',
     help='geo-location cache filename to use, defaults to geo_cache.csv')
 parser.add_argument('--verbose', action='store_true',
@@ -40,7 +36,7 @@ parser.add_argument('--verbose', action='store_true',
 
 def locate_all_places(args, path):
     counts = {}
-    geocoder = Geocode(args.geo_cache_filename, args.default_country, args.always_geocode, args.verbose, args.geo_cache_filename, args.always_write_cache)
+    geocoder = Geocode(args.geo_cache_filename, args.default_country, args.always_geocode, args.verbose, args.geo_cache_filename)
 
     with GedcomReader(path) as g:
         # Individuals: collect PLAC under any event (BIRT/DEAT/BAPM/MARR/etc.)
@@ -123,7 +119,7 @@ def ged_to_kml(args, fixed_gedcom_file):
     kml_file = os.path.join(path_dir, base_file_name + '.kml')
 
     print('Reading people from GEDCOM file:', args.input_file)
-    gedcom_parser = GedcomParser(gedcom_file=fixed_gedcom_file, default_country=args.default_country, always_geocode=args.always_geocode, verbose=args.verbose, location_cache_file=args.geo_cache_filename, always_write_cache=args.always_write_cache)
+    gedcom_parser = GedcomParser(gedcom_file=fixed_gedcom_file, default_country=args.default_country, always_geocode=args.always_geocode, verbose=args.verbose, location_cache_file=args.geo_cache_filename)
 
     people = gedcom_parser.parse_people()
 
@@ -136,7 +132,7 @@ def ged_to_kml(args, fixed_gedcom_file):
         main_person_id = list(people.keys())[0]
         print ("Using starting person: {} ({})".format(people[main_person_id].name, main_person_id))
 
-        kml_life_lines_creator = KML_Life_Lines_Creator(kml_file, people, verbose=args.verbose, main_person_id=main_person_id)
+        kml_life_lines_creator = KML_Life_Lines_Creator(kml_file, people, main_person_id=main_person_id, verbose=args.verbose)
         kml_life_lines_creator.add_default_location_if_unknown(main_person_id)
         kml_life_lines_creator.add_people()
         # if args.story_type == 'parents':
@@ -160,9 +156,8 @@ def main():
     counts = locate_all_places(args, fixed_gedcom_file)
     write_places_to_csv(counts, output_file)
 
-    if args.write_kml:
-        print('Writing KML file...')
-        ged_to_kml(args, fixed_gedcom_file)
+    print('Writing KML file...')
+    ged_to_kml(args, fixed_gedcom_file)
 
     # print a summary (top 20)
     if args.verbose:

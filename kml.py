@@ -56,13 +56,14 @@ class KML_Life_Lines_Creator:
     # place_type_list = {'native':'native'}
     place_type_list = {'born':'born'}
 
-    def __init__(self, kml_file, people: Dict[str, Person], use_hyperlinks=True, verbose=False):
+    def __init__(self, kml_file, people: Dict[str, Person], use_hyperlinks=True, main_person_id=None, verbose=False):
         self.kml_instance = KmlExporter(kml_file)
         self.people = people
         self.kml_point_to_person_lookup = dict()
         self.kml_person_to_point_lookup = dict()
         self.kml_person_to_placemark_lookup = dict()
         self.use_hyperlinks = use_hyperlinks
+        self.main_person_id = main_person_id
         self.verbose = verbose
 
         self.elaborate_locations()

@@ -51,12 +51,11 @@ class Geocode:
 
     gecode_sleep_interval = 1 # insert a delay due to low request limit of free Nominatim service
 
-    def __init__(self, cache_file, default_country=default_country, always_geocode=False, verbose=False, location_cache_file=None, always_write_cache=False):
+    def __init__(self, cache_file, default_country=default_country, always_geocode=False, verbose=False, location_cache_file=None):
         self.always_geocode = always_geocode
         self.default_country = default_country
         self.verbose = verbose
         self.location_cache_file = location_cache_file
-        self.always_write_cache = always_write_cache
 
         self.address_cache = {}
         self.read_address_cache()
