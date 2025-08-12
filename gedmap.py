@@ -68,31 +68,39 @@ def write_places_summary(args, full_geolocation_dict, output_file):
 def write_people_summary(args, people, output_file):
     people_summary = []
     for person_id, person in people.items():
+        birth_place = person.birth.place if person.birth else ''
+        birth_continent = person.birth.location.get('continent', '') if (person.birth and getattr(person.birth, 'location', None)) else ''
+        if birth_place and not birth_continent:
+            print(f"Birth continent not found for {person.name}; place: {birth_place}; continent: {birth_continent}")
         people_summary.append({
             'ID': person_id,
             'Name': person.name,
             'birth_place': person.birth.place if person.birth else '',
             'birth_date': person.birth.date_year() if person.birth else '',
+            'birth_country': person.birth.location.get('country', '') if (person.birth and getattr(person.birth, 'location', None)) else '',
             'birth_continent': person.birth.location.get('continent', '') if (person.birth and getattr(person.birth, 'location', None)) else '',
             'death_place': person.death.place if person.death else '',
             'death_date': person.death.date_year() if person.death else '',
+            'death_country': person.death.location.get('country', '') if (person.death and getattr(person.death, 'location', None)) else '',
             'death_continent': person.death.location.get('continent', '') if (person.death and getattr(person.death, 'location', None)) else ''
         })
 
     with open(output_file, 'w', newline='') as csvfile:
         csv_writer = csv.writer(csvfile, dialect='excel')
-        csv_writer.writerow(['ID', 'Name', 'birth_place', 'birth_date', 'birth_continent', 'death_place', 'death_date', 'death_continent'])
+        csv_writer.writerow(['ID', 'Name', 'birth_place', 'birth_date', 'birth_country', 'birth_continent', 'death_place', 'death_date', 'death_country', 'death_continent'])
         for summary in people_summary:
             csv_writer.writerow([summary['ID'],
                                  summary['Name'],
                                  summary['birth_place'],
                                  summary['birth_date'],
+                                 summary['birth_country'],
                                  summary['birth_continent'],
                                  summary['death_place'],
                                  summary['death_date'],
+                                 summary['death_country'],
                                  summary['death_continent']])
 
-def write_birth_death_countries_summary(args, people, output_file):
+def write_birth_death_countries_summary(args, people, output_file, gedcom_file_name):
     birth_death_countries_summary = {}
 
     for person_id in people.keys():
@@ -141,10 +149,10 @@ def write_birth_death_countries_summary(args, people, output_file):
 
     # After writing the CSV in write_birth_death_countries_summary:
     output_image_file = os.path.splitext(output_file)[0] + "_heatmap.png"
-    save_birth_death_heatmap(birth_death_countries_summary, output_image_file)
+    save_birth_death_heatmap(birth_death_countries_summary, output_image_file, gedcom_file_name)
     print(f"Saved heatmap image to {output_image_file}")
 
-def write_countries_summary(args, people, output_file):
+def write_countries_summary(args, people, output_file, gedcom_file_name):
     countries_summary = {}
 
     for person_id in people.keys():
@@ -170,7 +178,7 @@ def write_countries_summary(args, people, output_file):
 import matplotlib.pyplot as plt
 import numpy as np
 
-def save_birth_death_heatmap(birth_death_countries_summary, output_image_file):
+def save_birth_death_heatmap(birth_death_countries_summary, output_image_file, gedcom_file_name):
 
     # Prepare data for DataFrame
     records = []
@@ -205,6 +213,8 @@ def save_birth_death_heatmap(birth_death_countries_summary, output_image_file):
         aggfunc='sum'
     )
 
+    num_people = int(df['Count'].sum())
+
     plt.figure(figsize=(max(10, heatmap_df.shape[1] * 0.5), max(8, heatmap_df.shape[0] * 0.5)))
     ax = sns.heatmap(
         heatmap_df, annot=False, fmt='d', cmap='Blues', cbar=False, # remove the colourbar (legend)
@@ -212,7 +222,7 @@ def save_birth_death_heatmap(birth_death_countries_summary, output_image_file):
     )
     xlabel_text = ax.set_xlabel('Death Country', color='red')
     ylabel_text = ax.set_ylabel('Birth Country', color='blue')
-    plt.title('Birth vs Death Country Heatmap (by Continent)')
+    plt.title(f'{gedcom_file_name} : Birth & Death Country Heatmap (by Continent)')
 
     fig = plt.gcf()
     fig.canvas.draw() # Needed to compute text position
@@ -368,6 +378,14 @@ def save_birth_death_heatmap(birth_death_countries_summary, output_image_file):
 
     fig.canvas.draw() # Needed to compute text position
 
+    # Add footer text with filename root and total number of people
+    footer_text = f"File: {gedcom_file_name}   |   Total people: {num_people}   |   (including spouses)"
+    plt.figtext(
+        0.01, 0.01, footer_text,
+        ha='left', va='bottom',
+        fontsize=10, color='gray'
+    )
+
     plt.tight_layout()
     plt.savefig(output_image_file)
     plt.close()
@@ -462,7 +480,7 @@ def main():
         if args.write_countries_summary or args.write_all:
             output_file = os.path.join(path_dir, f"{base_file_name}_countries.csv")
             print(f"Writing countries summary to {output_file}")
-            write_birth_death_countries_summary(args, people, output_file)
+            write_birth_death_countries_summary(args, people, output_file, base_file_name)
 
 if __name__ == "__main__":
     main()

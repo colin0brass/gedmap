@@ -119,6 +119,9 @@ class GedcomParser:
             found_lat_lon = False
             if place_tag:
                 map = place_tag.sub_tag('MAP')
+                if place:
+                    location = self.geocode_lookup.lookup_location(place)
+                    event.location = location
                 if map:
                     lat = map.sub_tag('LATI')
                     lon = map.sub_tag('LONG')
