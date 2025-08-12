@@ -24,13 +24,31 @@ parser.add_argument('--always-geocode', action='store_true',
     help='always geocode, ignore cache')
 parser.add_argument('--geo_cache_filename', type=str, default='geo_cache.csv',
     help='geo-location cache filename to use, defaults to geo_cache.csv')
-parser.add_argument('--full_place_summary', action='store_true',
-    help='save full place summary')
+parser.add_argument('--write_place_summary', action='store_true',
+    help='save place summary')
+parser.add_argument('--write_person_summary', action='store_true',
+    help='save person summary')
 parser.add_argument('--verbose', action='store_true',
     help='verbose output')
 
 
-def locate_all_places(args, path):
+def write_places_to_csv(counts, output_file):
+    with open(output_file, 'w', newline='') as csvfile:
+        csv_header = ['count', 'latitude', 'longitude', 'found_country', 'has_date', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
+        csv_writer = csv.writer(csvfile, dialect='excel')
+        csv_writer.writerow(csv_header)
+        for place, data in counts.items():
+            place_array = place.split(',')
+            place_array = [p.strip() for p in place_array]
+            location = data.get('location', {})
+            latitude = location.get('latitude') if location else ''
+            longitude = location.get('longitude') if location else ''
+            found_country = location.get('found_country') if location else ''
+            has_date = data.get('has_date', False)
+            r = [data['count'], latitude, longitude, found_country, has_date] + list(reversed(place_array))
+            csv_writer.writerow(r)
+
+def write_place_summary(args, path, output_file):
     counts = {}
     geocoder = Geocode(args.geo_cache_filename, args.default_country, args.always_geocode, args.verbose, args.geo_cache_filename)
 
@@ -46,6 +64,9 @@ def locate_all_places(args, path):
                         counts[place] = {'count': 1, 'location': location}
                     else:
                         counts[place]['count'] += 1
+                    has_date = counts[place].get('has_date', False)
+                    if ev.sub_tag_value("DATE"): has_date = True
+                    counts[place]['has_date'] = has_date
 
         # Families: marriage/divorce places, etc.
         for fam in g.records0("FAM"):
@@ -58,24 +79,37 @@ def locate_all_places(args, path):
                         counts[place] = {'count': 1, 'location': location}
                     else:
                         counts[place]['count'] += 1
+                    has_date = counts[place].get('has_date', False)
+                    if ev.sub_tag_value("DATE"): has_date = True
+                    counts[place]['has_date'] = has_date
 
-    geocoder.close()
-    return counts
+    geocoder.close() # give chance for wrap-up, including saving any cached locations
+    write_places_to_csv(counts, output_file)
 
-def write_places_to_csv(counts, output_file):
+def write_person_summary(args, path, output_file):
+    people_summary = {}
+    with GedcomReader(path) as g:
+        for indi in g.records0("INDI"):
+            name = indi.sub_tag_value("NAME")
+            if name:
+                people_summary[indi.xref_id] = {'name': name}
+            birth = indi.sub_tag('BIRT')
+            if birth:
+                if birth.sub_tag('DATE'): people_summary[indi.xref_id]['has_date'] = True
+                if birth.sub_tag('PLAC'): people_summary[indi.xref_id]['has_place'] = True
+                people_summary[indi.xref_id]['birth_place'] = birth.sub_tag_value('PLAC') if birth.sub_tag('PLAC') else ''
+                people_summary[indi.xref_id]['birth_date'] = birth.sub_tag_value('DATE') if birth.sub_tag('DATE') else ''
+
     with open(output_file, 'w', newline='') as csvfile:
-        csv_header = ['count', 'latitude', 'longitude', 'found_country', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
         csv_writer = csv.writer(csvfile, dialect='excel')
-        csv_writer.writerow(csv_header)
-        for place, data in counts.items():
-            place_array = place.split(',')
-            place_array = [p.strip() for p in place_array]
-            location = data.get('location', {})
-            latitude = location.get('latitude') if location else ''
-            longitude = location.get('longitude') if location else ''
-            found_country = location.get('found_country') if location else ''
-            r = [data['count'], latitude, longitude, found_country] + list(reversed(place_array))
-            csv_writer.writerow(r)
+        csv_writer.writerow(['ID', 'Name', 'has_date', 'has_place', 'birth_place', 'birth_date'])
+        for person_id, indi in people_summary.items():
+            csv_writer.writerow([person_id,
+                                 indi.get('name', ''),
+                                 indi.get('has_date', False),
+                                 indi.get('has_place', False),
+                                 indi.get('birth_place', ''),
+                                 indi.get('birth_date', '')])
 
 LINE_RE = re.compile(
     r'^(\d+)\s+(?:@[^@]+@\s+)?([A-Z0-9_]+)(.*)$'
@@ -142,7 +176,7 @@ def main():
 
     path_dir = os.path.dirname(args.input_file)
     base_file_name = os.path.splitext(os.path.basename(args.input_file))[0]
-    output_file = os.path.join(path_dir, f"{base_file_name}_places.csv")
+
 
     print('Fixing CONC/CONT levels in GEDCOM file:', args.input_file)
     fixed_gedcom_file = fix_gedcom_conc_cont_levels(args.input_file)
@@ -150,10 +184,17 @@ def main():
     print('Writing KML file...')
     ged_to_kml(args, fixed_gedcom_file)
 
-    if args.full_place_summary:
-        print(f"Writing full place summary to {output_file}")
-        counts = locate_all_places(args, fixed_gedcom_file)
-        write_places_to_csv(counts, output_file)
+    if args.write_place_summary:
+        output_file = os.path.join(path_dir, f"{base_file_name}_places.csv")
+        print(f"Writing place summary to {output_file}")
+        # counts = locate_all_places(args, fixed_gedcom_file)
+        # write_places_to_csv(counts, output_file)
+        write_place_summary(args, fixed_gedcom_file, output_file)
+
+    if args.write_person_summary:
+        output_file = os.path.join(path_dir, f"{base_file_name}_people.csv")
+        print(f"Writing person summary to {output_file}")
+        write_person_summary(args, fixed_gedcom_file, output_file)
 
 if __name__ == "__main__":
     main()

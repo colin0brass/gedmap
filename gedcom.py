@@ -4,9 +4,6 @@
     # used extensions of the person ID in name field to distinguish (and allow hyperlinks to) different life events:
     # -1 for birth; -2 for death
 
-    # looks as though simplekml doesn't allow setting if "placemark ID"
-    # https://stackoverflow.com/questions/67325123/change-the-tag-id-attribute-in-kml-simplekml
-
 import re
 
 from typing import Dict
@@ -102,7 +99,7 @@ class GedcomParser:
             verbose=verbose,
             location_cache_file=location_cache_file,
         )
-        
+
     def close(self):
         self.geocode_lookup.close()
 
