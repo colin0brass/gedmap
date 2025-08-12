@@ -2,6 +2,7 @@ import os
 import csv
 import time
 import pycountry
+import pycountry_convert as pc
 import yaml  # Add PyYAML to your requirements if not already present
 from geopy.geocoders import Nominatim
 
@@ -36,6 +37,7 @@ class Geocode:
         self.country_name_to_code_dict = {country.name: country.alpha_2 for country in pycountry.countries}
         self.country_name_to_code_dict.update(self.additional_countries_codes_dict_to_add)
         self.country_code_to_name_dict = {v.upper(): k for k, v in self.country_name_to_code_dict.items()}
+        self.country_code_to_continent_dict = {code: self.country_code_to_continent(code) for code in self.country_code_to_name_dict.keys()}
 
     def close(self):
         if self.location_cache_file:
@@ -73,20 +75,20 @@ class Geocode:
                 csv_writer.writerow(line)
         print('Saved address cache to:', self.location_cache_file)
 
+    def country_code_to_continent(self, country_code):
+        try:
+            continent_code = pc.country_alpha2_to_continent_code(country_code)
+            continent_name = pc.convert_continent_code_to_continent_name(continent_code)
+            return continent_name
+        except Exception:
+            return None
+    
     def get_place_and_countrycode(self, place):
         found = False
         country_name = ''
 
         last_place_element = place.split(',')[-1].strip()
 
-        # if place.lower() == 'american colonies':
-        #     print(f"Substituting country 'American Colonies' with 'USA' in place '{place}'")
-        #     print('last_place_element:', last_place_element)
-        #     print('country_name:', country_name)
-        #     print('found:', found)
-        #     country_name = 'USA'
-        #     found = True
-        #     # break
         for key in self.country_substitutions:
             if last_place_element.lower() == key.lower():
                 new_country = self.country_substitutions[key]
@@ -143,6 +145,7 @@ class Geocode:
                 'found_country': found_country,
                 'country_code': country_code.upper(),
                 'country': country_name,
+                'continent': self.country_code_to_continent_dict.get(country_code, ''),
                 'latitude': geo_location.latitude,
                 'longitude': geo_location.longitude,
                 'address': geo_location.address

@@ -30,7 +30,7 @@ class KmlExporter:
                 coords=[(lat_lon.lon, lat_lon.lat)],
                 description=description)
             if timestamp:
-                pnt.timestamp.when = timestamp
+                pnt.timestamp.date = timestamp
             # if xref_id:
             #     pnt._kml['id'] = xref_id
             point_id = pnt.id # this returns the ID of the point, however that is wrapped-up in a Placemark which has id+1
@@ -135,15 +135,15 @@ class KML_Life_Lines_Creator:
                     father.lat_lon = person.lat_lon
                 self.add_default_location_if_unknown(mother.xref_id)
 
-    # using when_year() since not yet figured out how to extract a parsable full date from life event
+    # using date_year() since not yet figured out how to extract a parsable full date from life event
     def add_person(self, current: Person):
 #         print('Life_Lines_Creator: add_person: ', current.name)
         if current.birth and current.lat_lon:
             if current.lat_lon.lat is not None and current.lat_lon.lon is not None:
 #                 print('add_person: {} {},{}'.format(current.name, current.lat_lon.lat, current.lat_lon.lon))
-    #             print('kml_instance.add_point: ', current.name, current.lat_lon, current.birth.when)
-                description =  '{} {}<br>{}<br>'.format('Birth', current.birth.when_year(), current.birth.where)
-                placemark_id, point_id = self.kml_instance.add_point(current.name, current.lat_lon, current.birth.when_year(), description)
+    #             print('kml_instance.add_point: ', current.name, current.lat_lon, current.birth.date)
+                description =  '{} {}<br>{}<br>'.format('Birth', current.birth.date_year(), current.birth.place)
+                placemark_id, point_id = self.kml_instance.add_point(current.name, current.lat_lon, current.birth.date_year(), description)
     #             print('add_person: {} : id={}'.format(current.name, id))
                 self.kml_point_to_person_lookup[point_id] = current.xref_id
                 self.kml_person_to_point_lookup[current.xref_id] = point_id
@@ -211,8 +211,8 @@ class KML_Life_Lines_Creator:
             if person.lat_lon and person.lat_lon.lat is not None:
                 begin_date = None # initial value
                 if person.birth:
-                    if person.birth.when:
-                        begin_date = person.birth.when_year()
+                    if person.birth.date:
+                        begin_date = person.birth.date_year()
 
                 if person.father:
                     father = self.people[person.father]
@@ -220,8 +220,8 @@ class KML_Life_Lines_Creator:
                     if father.lat_lon and father.lat_lon.lat is not None:
                         end_date = None # initial value
                         if father.birth:
-                            if father.birth.when:
-                                end_date = father.birth.when_year()
+                            if father.birth.date:
+                                end_date = father.birth.date_year()
                         line_id = self.kml_instance.draw_line(line_name, person.lat_lon, father.lat_lon,
                                         begin_date, end_date,
                                         simplekml.Color.blue)
@@ -232,8 +232,8 @@ class KML_Life_Lines_Creator:
                     if mother.lat_lon and mother.lat_lon.lat is not None:
                         end_date = None # initial value
                         if mother.birth:
-                            if mother.birth.when:
-                                end_date = mother.birth.when_year()
+                            if mother.birth.date:
+                                end_date = mother.birth.date_year()
 #                         print('mother: {} : {},{}; {}'.format(mother,mother))
                         line_id = self.kml_instance.draw_line(line_name, person.lat_lon, mother.lat_lon,
                                         begin_date, end_date,
@@ -244,8 +244,8 @@ class KML_Life_Lines_Creator:
             person = self.people[person_id]
             if person.lat_lon and person.lat_lon.lat is not None:
                 lat_lon = person.lat_lon
-                begin_year = person.birth.when_year() if person.birth and person.birth.when else None
-                end_year = person.death.when_year() if person.death and person.death.when else None
+                begin_year = person.birth.date_year() if person.birth and person.birth.date else None
+                end_year = person.death.date_year() if person.death and person.death.date else None
                 self.kml_instance.lookat(lat_lon=lat_lon, begin_year=begin_year, end_year=end_year)
 
     def save_kml(self):

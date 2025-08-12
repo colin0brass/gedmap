@@ -17,32 +17,32 @@ from lat_lon import LatLon
 
 class LifeEvent:
     def __init__(self, place : str, atime, lat_lon : LatLon=None, what=None):
-        self.where = place
-        self.when = atime
+        self.place = place
+        self.date = atime
         self.lat_lon = lat_lon
         self.what = what
 
     def __repr__(self):
-        return '[ {} : {} ]'.format(self.when, self.where)
+        return '[ {} : {} ]'.format(self.date, self.place)
 
-    def when_year(self, last = False):
-        if self.when:
-            if (type(self.when) == type(' ')):
-                return (self.when)
+    def date_year(self, last = False):
+        if self.date:
+            if (type(self.date) == type(' ')):
+                return (self.date)
             else:
-                if self.when.value.kind.name == 'RANGE' or self.when.value.kind.name == 'PERIOD':
+                if self.date.value.kind.name == 'RANGE' or self.date.value.kind.name == 'PERIOD':
                     if last:
-                        return self.when.value.date1.year_str
+                        return self.date.value.date1.year_str
                     else:
-                        return self.when.value.date2.year_str
-                elif self.when.value.kind.name == 'PHRASE':
+                        return self.date.value.date2.year_str
+                elif self.date.value.kind.name == 'PHRASE':
                     try:
-                        return re.search(r'[0-9]{4}', self.when.value.phrase)[0] # to improve
+                        return re.search(r'[0-9]{4}', self.date.value.phrase)[0] # to improve
                     except:
-                        print('LifeEvent: when_year: Warning: unable to parse date phrase: ', self.when.value.phrase)
+                        print('LifeEvent: date_year: Warning: unable to parse date phrase: ', self.date.value.phrase)
                         return None
                 else:
-                    return self.when.value.date.year_str
+                    return self.date.value.date.year_str
         return None
 
     def __getattr__(self, name):
@@ -78,8 +78,8 @@ class Person:
 
     def ref_year(self):
         best_year = 'Unknown'
-        if self.birth and self.birth.when: best_year = 'Born {}'.format(self.birth.when_year())
-        if self.death and self.death.when: best_year = 'Died {}'.format(self.death.when_year())
+        if self.birth and self.birth.date: best_year = 'Born {}'.format(self.birth.date.year_str())
+        if self.death and self.death.date: best_year = 'Died {}'.format(self.death.date.year_str())
         return best_year
 
 
@@ -110,6 +110,31 @@ class GedcomParser:
             if place: place_value = place.value
         return place_value
 
+    def __get_event_location(self, record: Record) -> LifeEvent:
+        event = None
+        if record:
+            place = GedcomParser.get_place(record)
+            event = LifeEvent(place, record.sub_tag('DATE'))
+            place_tag = record.sub_tag('PLAC')
+            found_lat_lon = False
+            if place_tag:
+                map = place_tag.sub_tag('MAP')
+                if map:
+                    lat = map.sub_tag('LATI')
+                    lon = map.sub_tag('LONG')
+                    if lat and lon:
+                        event.lat_lon = LatLon(lat.value, lon.value)
+                        found_lat_lon = True
+            if not found_lat_lon:
+                if place:
+                    location = self.geocode_lookup.lookup_location(place)
+                    event.location = location
+                    if location and location['latitude'] and location['longitude']:
+                        event.lat_lon = LatLon(location['latitude'], location['longitude'])
+                else:
+                    event.lat_lon = None
+        return event
+
     def __create_person(self, record: Record) -> Person:
         person = Person(record.xref_id)
         person.name = ''
@@ -124,67 +149,23 @@ class GedcomParser:
             person.surname = 'Unknown'
             person.maidenname = 'Unknown'
             person.name = 'Unknown'
-
-#         # photo
-#         obj = record.sub_tag('OBJE')
-#         person.photo = None
-#         if (obj):
-#             isjpg = obj.sub_tag('FORM') and obj.sub_tag('FORM').value == 'jpg'
-#             if (isjpg):
-#                 person.photo = obj.sub_tag('FILE').value
-
+            
         person.sex = record.sex
-        birth = record.sub_tag('BIRT')
-        if birth:
-#             print('birth:', birth)
-            place = GedcomParser.get_place(birth)
-            person.birth = LifeEvent(place, birth.sub_tag('DATE'))
-            place_tag = birth.sub_tag('PLAC')
-            found_lat_lon = False
-            if place_tag:
-                map = place_tag.sub_tag('MAP')
-                if map:
-                    lat = map.sub_tag('LATI')
-                    lon = map.sub_tag('LONG')
-                    if lat and lon:
-                        person.lat_lon = LatLon(lat.value, lon.value)
-                        person.birth.lat_lon = LatLon(lat.value, lon.value)
-                        found_lat_lon = True
-            if not found_lat_lon:
-                if place:
-                    # location = Geocode().lookup_location(place)
-                    location = self.geocode_lookup.lookup_location(place)
-                    if location and location['latitude'] and location['longitude']:
-                        person.lat_lon = LatLon(location['latitude'], location['longitude'])
-                        person.birth.lat_lon = LatLon(location['latitude'], location['longitude'])
-                    # person.lat_lon = Geocode().lookup_location(place)
-                    # if person.lat_lon:
-                    #     person.birth.lat_lon = person.lat_lon
-                    # else:
-                    #     person.birth.lat_lon = None
-                else:
-                    person.birth.lat_lon = None
-
-        # to add marriage and death locations, and potential residence locations too
+        person.birth = self.__get_event_location(record.sub_tag('BIRT'))
+        person.death = self.__get_event_location(record.sub_tag('DEAT'))
+        person.marriage = self.__get_event_location(record.sub_tag('MARR'))
 
         return person
 
     def __create_people(self, records0) -> Dict[str, Person]:
         people = dict()
         for record in records0('INDI'):
-#             print(record)
-            # people[record.xref_id] = GedcomParser.__create_person(record)
             people[record.xref_id] = self.__create_person(record)
-#             print('{}: {}'.format(record.xref_id, people[record.xref_id]))
         for record in records0('FAM'):
             husband = record.sub_tag('HUSB')
             wife = record.sub_tag('WIFE')
             for child in record.sub_tags('CHIL'):
                 if child.xref_id in people.keys():
-#                     print('record:', record)
-#                     print('husband:', husband)
-#                     print('wife:', wife)
-#                     print('child:', people[child.xref_id])
                     if people[child.xref_id]:
                         if husband:
                             people[child.xref_id].father = husband.xref_id
@@ -192,9 +173,32 @@ class GedcomParser:
                         if wife:
                             people[child.xref_id].mother = wife.xref_id
                             people[wife.xref_id].children.append(child.xref_id)
-#         print('GedcomParser: __create_people : people=', people)
         return people
 
     def parse_people(self) -> Dict[str, Person]:
         with GedcomReader(self.gedcom_file) as parser:
             return self.__create_people(parser.records0)
+
+    def get_full_place_dict(self):
+        full_place_dict = {}
+
+        with GedcomReader(self.gedcom_file) as g:
+            # Individuals: collect PLAC under any event (BIRT/DEAT/BAPM/MARR/etc.)
+            for indi in g.records0("INDI"):
+                for ev in indi.sub_records:
+                    plac = ev.sub_tag_value("PLAC")  # returns None if missing
+                    if plac:
+                        place = plac.strip()
+                        if place not in full_place_dict:
+                            full_place_dict[place] = {'count': 1, 'place': place}
+
+            # Families: marriage/divorce places, etc.
+            for fam in g.records0("FAM"):
+                for ev in fam.sub_records:
+                    plac = ev.sub_tag_value("PLAC")
+                    if plac:
+                        place = plac.strip()
+                        if place not in full_place_dict:
+                            full_place_dict[place] = {'count': 1, 'place': place}
+
+        return full_place_dict
