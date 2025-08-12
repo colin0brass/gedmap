@@ -30,7 +30,7 @@ class KmlExporter:
                 coords=[(lat_lon.lon, lat_lon.lat)],
                 description=description)
             if timestamp:
-                pnt.timestamp.date = timestamp
+                pnt.timestamp.when = timestamp
             # if xref_id:
             #     pnt._kml['id'] = xref_id
             point_id = pnt.id # this returns the ID of the point, however that is wrapped-up in a Placemark which has id+1

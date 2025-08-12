@@ -328,7 +328,6 @@ def save_birth_death_heatmap(birth_death_countries_summary, output_image_file):
         start = min(positions)
         end = max(positions)
         x = (start + end + 1) / 2
-        # colour = colours[idx % len(colours)]
         colour = continent_colours.get(group, 'black')
         ax.annotate(
             group,
@@ -353,7 +352,6 @@ def save_birth_death_heatmap(birth_death_countries_summary, output_image_file):
         start = min(positions)
         end = max(positions)
         y = (start + end + 1) / 2
-        # colour = colours[idx % len(colours)]
         colour = continent_colours.get(group, 'black')
         ax.annotate(
             group,
