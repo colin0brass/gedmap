@@ -5,15 +5,17 @@ import csv
 
 import argparse
 import tempfile
+import shutil
 
 import pandas as pd
 import seaborn as sns
 
-from ged4py.parser import GedcomReader
+# from ged4py.parser import GedcomReader
 
 from geocode import Geocode
 
-from gedcom import GedcomParser
+from gedcom import GeolocatedGedcom
+
 from kml import KML_Life_Lines_Creator
 
 default_country='England'
@@ -39,28 +41,16 @@ parser.add_argument('--write_all', action='store_true',
 parser.add_argument('--verbose', action='store_true',
     help='verbose output')
 
-def geolocate_all(args, gedcom_parser, geocoder):
-    full_geolocation_dict = gedcom_parser.get_full_place_dict()
-
-    for place, data in full_geolocation_dict.items():
-        location = geocoder.lookup_location(place)
-        continent = location.get('continent', '')
-        if not continent or continent.strip().lower() in ('', 'none'):
-            location['continent'] = geocoder.country_code_to_continent(location.get('country_code', ''))
-
-        full_geolocation_dict[place]['location'] = location
-
-    return full_geolocation_dict
-
 def write_places_summary(args, full_geolocation_dict, output_file):
     with open(output_file, 'w', newline='') as csvfile:
         csv_header = ['count', 'latitude', 'longitude', 'found_country', 'has_date', 'place']
         csv_writer = csv.writer(csvfile, dialect='excel')
         csv_writer.writerow(csv_header)
         for place, data in full_geolocation_dict.items():
-            latitude = data.get('location', {}).get('latitude', '')
-            longitude = data.get('location', {}).get('longitude', '')
-            found_country = data.get('location', {}).get('found_country', '')
+            location = data.get('location', None)
+            latitude = location.latitude if location and hasattr(location, 'latitude') else ''
+            longitude = location.longitude if location and hasattr(location, 'longitude') else ''
+            found_country = location.found_country if location and hasattr(location, 'found_country') else ''
             has_date = data.get('has_date', False)
             r = [data['count'], latitude, longitude, found_country, has_date, place]
             csv_writer.writerow(r)
@@ -69,7 +59,7 @@ def write_people_summary(args, people, output_file):
     people_summary = []
     for person_id, person in people.items():
         birth_place = person.birth.place if person.birth else ''
-        birth_continent = person.birth.location.get('continent', '') if (person.birth and getattr(person.birth, 'location', None)) else ''
+        birth_continent = person.birth.location.continent if (person.birth and getattr(person.birth, 'location', None)) else ''
         if birth_place and not birth_continent:
             print(f"Birth continent not found for {person.name}; place: {birth_place}; continent: {birth_continent}")
         people_summary.append({
@@ -77,12 +67,12 @@ def write_people_summary(args, people, output_file):
             'Name': person.name,
             'birth_place': person.birth.place if person.birth else '',
             'birth_date': person.birth.date_year() if person.birth else '',
-            'birth_country': person.birth.location.get('country', '') if (person.birth and getattr(person.birth, 'location', None)) else '',
-            'birth_continent': person.birth.location.get('continent', '') if (person.birth and getattr(person.birth, 'location', None)) else '',
+            'birth_country': person.birth.location.country if (person.birth and getattr(person.birth, 'location', None)) else '',
+            'birth_continent': person.birth.location.continent if (person.birth and getattr(person.birth, 'location', None)) else '',
             'death_place': person.death.place if person.death else '',
             'death_date': person.death.date_year() if person.death else '',
-            'death_country': person.death.location.get('country', '') if (person.death and getattr(person.death, 'location', None)) else '',
-            'death_continent': person.death.location.get('continent', '') if (person.death and getattr(person.death, 'location', None)) else ''
+            'death_country': person.death.location.country if (person.death and getattr(person.death, 'location', None)) else '',
+            'death_continent': person.death.location.continent if (person.death and getattr(person.death, 'location', None)) else ''
         })
 
     with open(output_file, 'w', newline='') as csvfile:
@@ -112,16 +102,16 @@ def write_birth_death_countries_summary(args, people, output_file, gedcom_file_n
             birth_location = person.birth.location if person.birth.location else None
             if birth_location:
                 if birth_location:
-                    birth_country = birth_location.get('country', '')
-                    birth_country_continent = birth_location.get('continent', '')
+                    birth_country = birth_location.country
+                    birth_country_continent = birth_location.continent
                     found_birth_country = True
 
         if person.death:
             death_location = person.death.location if person.death.location else None
             if death_location:
                 if death_location:
-                    death_country = death_location.get('country', '')
-                    death_country_continent = death_location.get('continent', '')
+                    death_country = death_location.country
+                    death_country_continent = death_location.continent
                     found_death_country = True
 
         if not found_birth_country:
@@ -161,9 +151,9 @@ def write_countries_summary(args, people, output_file, gedcom_file_name):
         if birth and birth.place:
             birth_location = person.birth.location if person.birth.location else None
             if birth_location:
-                country_code = birth_location.get('country_code', '').upper()
-                country = birth_location.get('country', '')
-                continent = birth_location.get('continent', '')
+                country_code = birth_location.country_code.upper()
+                country = birth_location.country
+                continent = birth_location.continent
                 if country:
                     if country not in countries_summary:
                         countries_summary[country] = {'count': 0, 'country_code': country_code, 'continent': continent}
@@ -399,6 +389,7 @@ def fix_gedcom_conc_cont_levels(input_path):
     os.close(temp_fd)
 
     cont_level = None
+    changed = False
 
     with open(input_path, 'r', encoding='utf-8', newline='') as infile, \
          open(temp_path, 'w', encoding='utf-8', newline='') as outfile:
@@ -415,13 +406,15 @@ def fix_gedcom_conc_cont_levels(input_path):
             if tag in ('CONC', 'CONT'):
                 fixed_level = cont_level if cont_level is not None else level
                 outfile.write(f"{fixed_level} {tag}{rest}\n")
+                if fixed_level != level:
+                    changed = True
             else:
                 cont_level = level + 1
                 outfile.write(raw)
-    return temp_path
+    return temp_path, changed
 
-def write_kml(args, people, output_file):
-    kml_life_lines_creator = KML_Life_Lines_Creator(output_file, people, verbose=args.verbose)
+def write_kml(args, gedcom, output_file):
+    kml_life_lines_creator = KML_Life_Lines_Creator(output_file, gedcom, verbose=args.verbose)
     # kml_life_lines_creator.add_default_location_if_unknown(main_person_id)
     kml_life_lines_creator.add_people()
     kml_life_lines_creator.connect_parents()
@@ -441,14 +434,13 @@ def main():
         base_file_name = os.path.splitext(os.path.basename(input_file))[0]
 
         print('Reading GEDCOM file:', input_file)
-        fixed_gedcom_file = fix_gedcom_conc_cont_levels(input_file)
-        gedcom_parser = GedcomParser(
-            gedcom_file=fixed_gedcom_file,
-            default_country=args.default_country,
-            always_geocode=args.always_geocode,
-            verbose=args.verbose,
-            location_cache_file=args.geo_cache_filename
-        )
+        fixed_gedcom_file, changed = fix_gedcom_conc_cont_levels(input_file)
+        if not changed:
+            gedcom_file = input_file
+        else:
+            gedcom_file = os.path.join(path_dir, f"{base_file_name}_fixed.ged")
+            shutil.copyfile(fixed_gedcom_file, gedcom_file)
+            print(f"Copied fixed GEDCOM file to {gedcom_file}")
 
         print('Geolocating all places...')
         geocoder = Geocode(
@@ -458,29 +450,36 @@ def main():
             args.verbose,
             args.geo_cache_filename
         )
-        geolocation_dict = geolocate_all(args, gedcom_parser, geocoder)
-        geocoder.save_address_cache()  # Save any cached locations
 
-        people = gedcom_parser.parse_people() # doing this after geolocation and saving cache
+        my_gedcom = GeolocatedGedcom(
+            gedcom_file=gedcom_file,
+            geocoder=geocoder,
+            default_country=args.default_country,
+            always_geocode=args.always_geocode,
+            verbose=args.verbose,
+            location_cache_file=args.geo_cache_filename
+        )
+
+        geocoder.save_address_cache()  # Save any cached locations
 
         print('Writing KML file...')
         output_file = os.path.join(path_dir, f"{base_file_name}.kml")
-        write_kml(args, people, output_file)
+        write_kml(args, my_gedcom, output_file)
 
         if args.write_places_summary or args.write_all:
             output_file = os.path.join(path_dir, f"{base_file_name}_places.csv")
             print(f"Writing places summary to {output_file}")
-            write_places_summary(args, geolocation_dict, output_file)
+            write_places_summary(args, my_gedcom.full_place_dict, output_file)
 
         if args.write_people_summary or args.write_all:
             output_file = os.path.join(path_dir, f"{base_file_name}_people.csv")
             print(f"Writing people summary to {output_file}")
-            write_people_summary(args, people, output_file)
+            write_people_summary(args, my_gedcom.people, output_file)
 
         if args.write_countries_summary or args.write_all:
             output_file = os.path.join(path_dir, f"{base_file_name}_countries.csv")
             print(f"Writing countries summary to {output_file}")
-            write_birth_death_countries_summary(args, people, output_file, base_file_name)
+            write_birth_death_countries_summary(args, my_gedcom.people, output_file, base_file_name)
 
 if __name__ == "__main__":
     main()

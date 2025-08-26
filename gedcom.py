@@ -1,26 +1,21 @@
-# notes from gedKml.pl:
-    # "Father: <a href=#I100;balloonFlyto>name</a>"
-    # file:///Users/OsborneFamily/Files%20outside%20of%20iCloud%20-%20check%20if%20need%20to%20keep/Scripting/Mapping/ancestorsRobertEdwardOsborne_160207.kml#I100;balloonFlyto
-    # used extensions of the person ID in name field to distinguish (and allow hyperlinks to) different life events:
-    # -1 for birth; -2 for death
-
 import re
 
-from typing import Dict
+from typing import Dict, List
 
 from ged4py.parser import GedcomReader
 from ged4py.model import Record, NameRec
 
-from geocode import Geocode
+from geocode import Geocode, Location
 
 from lat_lon import LatLon
 
 class LifeEvent:
-    def __init__(self, place : str, atime, lat_lon : LatLon=None, what=None):
+    def __init__(self, place : str, atime, lat_lon : LatLon=None, what=None, record : Record=None):
         self.place = place
         self.date = atime
         self.lat_lon = lat_lon
         self.what = what
+        self.record = record
 
     def __repr__(self):
         return '[ {} : {} ]'.format(self.date, self.place)
@@ -61,7 +56,7 @@ class Person:
         self.lat_lon : LatLon = None
         self.birth : LifeEvent = None
         self.death : LifeEvent = None
-        self.marriage = None # should add list
+        self.marriages = [] # list of LifeEvent
         self.firstname = None
         self.surname = None
         self.maidenname = None
@@ -86,19 +81,10 @@ class Person:
 class GedcomParser:
     default_country = 'England'
 
-    def __init__(self, gedcom_file=None, default_country=default_country, always_geocode=False, verbose=False, location_cache_file=None):
+    def __init__(self, gedcom_file=None, default_country=default_country, verbose=False):
         self.gedcom_file = gedcom_file
-        self.always_geocode = always_geocode
         self.default_country = default_country
         self.verbose = verbose
-        self.location_cache_file = location_cache_file
-        self.geocode_lookup = Geocode(
-            cache_file=location_cache_file,
-            default_country=default_country,
-            always_geocode=always_geocode,
-            verbose=verbose,
-            location_cache_file=location_cache_file,
-        )
 
     def close(self):
         self.geocode_lookup.close()
@@ -114,28 +100,7 @@ class GedcomParser:
         event = None
         if record:
             place = GedcomParser.get_place(record)
-            event = LifeEvent(place, record.sub_tag('DATE'))
-            place_tag = record.sub_tag('PLAC')
-            found_lat_lon = False
-            if place_tag:
-                map = place_tag.sub_tag('MAP')
-                if place:
-                    location = self.geocode_lookup.lookup_location(place)
-                    event.location = location
-                if map:
-                    lat = map.sub_tag('LATI')
-                    lon = map.sub_tag('LONG')
-                    if lat and lon:
-                        event.lat_lon = LatLon(lat.value, lon.value)
-                        found_lat_lon = True
-            if not found_lat_lon:
-                if place:
-                    location = self.geocode_lookup.lookup_location(place)
-                    event.location = location
-                    if location and location['latitude'] and location['longitude']:
-                        event.lat_lon = LatLon(location['latitude'], location['longitude'])
-                else:
-                    event.lat_lon = None
+            event = LifeEvent(place, record.sub_tag('DATE'), record=record)
         return event
 
     def __create_person(self, record: Record) -> Person:
@@ -156,7 +121,9 @@ class GedcomParser:
         person.sex = record.sex
         person.birth = self.__get_event_location(record.sub_tag('BIRT'))
         person.death = self.__get_event_location(record.sub_tag('DEAT'))
-        person.marriage = self.__get_event_location(record.sub_tag('MARR'))
+        # person.marriage = self.__get_event_location(record.sub_tag('MARR'))
+        # for marriage in record.sub_tags('MARR'):
+        #     person.marriage.append(self.__get_event_location(marriage))
 
         return person
 
@@ -164,9 +131,21 @@ class GedcomParser:
         people = dict()
         for record in records0('INDI'):
             people[record.xref_id] = self.__create_person(record)
-        for record in records0('FAM'):
-            husband = record.sub_tag('HUSB')
-            wife = record.sub_tag('WIFE')
+        return people
+
+    def __add_marriages(self, people: Dict[str, Person], records: List[Record]):
+        for record in records('FAM'):
+            husband_record = record.sub_tag('HUSB')
+            wife_record = record.sub_tag('WIFE')
+            husband = people[husband_record.xref_id] if husband_record else None
+            wife = people[wife_record.xref_id] if wife_record else None
+            for marriage in record.sub_tags('MARR'):
+                marriage_event = self.__get_event_location(marriage)
+                if marriage_event:
+                    if husband:
+                        husband.marriages.append(marriage_event)
+                    if wife:
+                        wife.marriages.append(marriage_event)
             for child in record.sub_tags('CHIL'):
                 if child.xref_id in people.keys():
                     if people[child.xref_id]:
@@ -179,8 +158,12 @@ class GedcomParser:
         return people
 
     def parse_people(self) -> Dict[str, Person]:
+        people = dict()
         with GedcomReader(self.gedcom_file) as parser:
-            return self.__create_people(parser.records0)
+            records = parser.records0
+            people = self.__create_people(records)
+            people = self.__add_marriages(people, records)
+            return people
 
     def get_full_place_dict(self):
         full_place_dict = {}
@@ -205,3 +188,80 @@ class GedcomParser:
                             full_place_dict[place] = {'count': 1, 'place': place}
 
         return full_place_dict
+    
+class Gedcom:
+    def __init__(self, gedcom_file=None, default_country='England', verbose=False):
+        self.gedcom_parser = GedcomParser(
+            gedcom_file=gedcom_file,
+            default_country=default_country,
+            verbose=verbose
+        )
+        self.people = dict()
+        self.full_place_dict = {}
+
+    def close(self):
+        self.gedcom_parser.close()
+
+    def _parse_people(self):
+        self.people = self.gedcom_parser.parse_people()
+        return self.people
+
+    def get_full_place_dict(self):
+        self.full_place_dict = self.gedcom_parser.get_full_place_dict()
+        return self.full_place_dict
+
+
+class GeolocatedGedcom(Gedcom):
+    def __init__(self, gedcom_file=None, geocoder=None, default_country='England', always_geocode=False, verbose=False, location_cache_file=None):
+        super().__init__(gedcom_file, default_country, verbose)
+        self.geocoder = geocoder
+        self.always_geocode = always_geocode
+        self.full_place_dict = {}
+
+        self._geolocate_all()
+
+        self._parse_people()
+
+    def _geolocate_all(self):
+        self.full_place_dict = self.gedcom_parser.get_full_place_dict()
+        for place, data in self.full_place_dict.items():
+            location = self.geocoder.lookup_location(place)
+            self.full_place_dict[place]['location'] = location
+
+    def _parse_people(self):
+        super()._parse_people()
+        self._geolocate_people()
+
+    def _geolocate_people(self):
+        for person in self.people.values():
+            if person.birth:
+                event = self._geolocate_event(person.birth)
+                person.birth.location = event.location
+                # person.birth.lat_lon = event.lat_lon
+            if person.death:
+                event = self._geolocate_event(person.death)
+                person.death.location = event.location
+                # person.death.lat_lon = event.lat_lon
+            for marriage_event in person.marriages:
+                event = self._geolocate_event(marriage_event)
+                marriage_event.location = event.location
+                # marriage_event.lat_lon = event.lat_lon
+
+    def _geolocate_event(self, event: LifeEvent) -> LifeEvent:
+        record = getattr(event, 'record', None)
+        if record:
+            place_tag = record.sub_tag('PLAC')
+            if place_tag:
+                map = place_tag.sub_tag('MAP')
+                if place_tag.value:
+                    location = self.geocoder.lookup_location(place_tag.value)
+                    event.location = location
+                if map:
+                    lat = map.sub_tag('LATI')
+                    lon = map.sub_tag('LONG')
+                    if lat and lon:
+                        event.lat_lon = LatLon(lat.value, lon.value)
+                    else:
+                        event.lat_lon = None
+
+        return event

@@ -4,17 +4,36 @@ import datetime
 import simplekml as simplekml
 
 from lat_lon import LatLon
-from gedcom import Person
+from gedcom import GeolocatedGedcom, Person
 
 class KmlExporter:
     line_width = 2
     timespan_default_start_year = 1950
     timespan_default_range_years = 100
+    marker_style = {
+        'Birth': {
+            'icon_href': 'http://maps.google.com/mapfiles/kml/paddle/pink-blank.png'
+        },
+        'Marriage': {
+            'icon_href': 'http://maps.google.com/mapfiles/kml/paddle/grn-blank.png',
+        },
+        'Death': {
+            'icon_href': 'http://maps.google.com/mapfiles/kml/paddle/wht-blank.png',
+        }
+    }
 
     def __init__(self, kml_file):
         self.kml_file = kml_file
         self.kml = simplekml.Kml()
 #         self.max_line_weight = 20
+        self.kml_folders = dict()
+
+        for marker_type in self.marker_style.keys():
+            self.marker_style[marker_type]['style'] = simplekml.Style()
+            self.marker_style[marker_type]['style'].iconstyle.icon.href = self.marker_style[marker_type]['icon_href']
+            self.marker_style[marker_type]['style'].name = marker_type
+
+            self.kml_folders[marker_type] = self.kml.newfolder(name=marker_type)
 
     def finalise(self):
         if not self.kml:
@@ -23,19 +42,18 @@ class KmlExporter:
             print('Saving KML file:', self.kml_file)
             self.kml.save(self.kml_file)
 
-    def add_point(self, name: str, lat_lon: LatLon, timestamp: str, description: str):
+    def add_point(self, marker_type: str, name: str, lat_lon: LatLon, timestamp: str, description: str):
         id = None
         if lat_lon.lat is not None and lat_lon.lon is not None:
-            pnt = self.kml.newpoint(name=name,
+            # pnt = self.kml.newpoint(name=name,
+            pnt = self.kml_folders[marker_type].newpoint(name=name,
                 coords=[(lat_lon.lon, lat_lon.lat)],
                 description=description)
             if timestamp:
                 pnt.timestamp.when = timestamp
-            # if xref_id:
-            #     pnt._kml['id'] = xref_id
+            if marker_type in self.marker_style.keys():
+                pnt.style = self.marker_style[marker_type]['style']
             point_id = pnt.id # this returns the ID of the point, however that is wrapped-up in a Placemark which has id+1
-#             id = pnt.placemark.id # tried this, but couldn't figure out how to look up placemarks in schema
-            # placemark_id = pnt._kml['id']
             placemark_id = pnt.placemark.id
         return placemark_id, point_id
 
@@ -65,12 +83,11 @@ class KmlExporter:
             self.kml.document.lookat = lookat # default lookat
 
 class KML_Life_Lines_Creator:
-    # place_type_list = {'native':'native'}
-    place_type_list = {'born':'born'}
+    place_type_list = ['Birth', 'Marriage', 'Death'] # 'native'
 
-    def __init__(self, kml_file, people: Dict[str, Person], use_hyperlinks=True, main_person_id=None, verbose=False):
+    def __init__(self, kml_file, gedcom: GeolocatedGedcom, use_hyperlinks=True, main_person_id=None, verbose=False):
         self.kml_instance = KmlExporter(kml_file)
-        self.people = people
+        self.gedcom = gedcom
         self.kml_point_to_person_lookup = dict()
         self.kml_person_to_point_lookup = dict()
         self.kml_person_to_placemark_lookup = dict()
@@ -78,134 +95,72 @@ class KML_Life_Lines_Creator:
         self.main_person_id = main_person_id
         self.verbose = verbose
 
-        self.elaborate_locations()
-
-    def elaborate_locations(self):
-        for p in self.people.keys():
-            self.people[p].map = self.people[p].lat_lon # save original location
-
-        for place_type in self.place_type_list:
-            if (place_type == 'native'):
-                for p in self.people.keys():
-                    self.people[p].lat_lon = self.people[p].map
-#                 print('KML native')
-                nametag = ''
-            elif (place_type == 'born'):
-                for p in self.people.keys():
-                    self.people[p].lat_lon = LatLon(None,None)
-                    if self.people[p].birth:
-                        if self.people[p].birth.lat_lon:
-                            self.people[p].lat_lon = self.people[p].birth.lat_lon
-                            if self.verbose: print('{} : born : {},{}'.format(
-                                self.people[p].name,
-                                self.people[p].lat_lon.lat,
-                                self.people[p].lat_lon.lon))
-#                 print ("KML born")
-                nametag = ' (b)'
-            elif (place_type == 'death'):
-                for p in self.people.keys():
-                    self.people[p].lat_lon = LatLon(None,None)
-                    if self.people[p].death:
-                        if self.people[p].death.lat_lon:
-                            self.people[p].lat_lon = self.people[p].death.lat_lon
-#                 print ("KML death")
-                nametag = ' (d)'
-            else:
-                print('Unknown place_type:', place_type)
-
-    def add_default_location_if_unknown(self, current: Person):
-        # use child's location for parent if parent doesn't have location
-        person = self.people[current]
-#         print('person: ', person)
-
-        if person.lat_lon:
-            if person.father:
-                father = self.people[person.father]
-#                 print('father: ', father)
-                lat_lon = father.lat_lon
-                if not lat_lon or lat_lon.lat is None:
-                    father.lat_lon = person.lat_lon
-                self.add_default_location_if_unknown(father.xref_id)
-
-            if person.mother:
-                mother = self.people[person.mother]
-#                 print('mother: ', mother)
-                lat_lon = mother.lat_lon
-                if not lat_lon or lat_lon.lat is None:
-                    father.lat_lon = person.lat_lon
-                self.add_default_location_if_unknown(mother.xref_id)
-
-    # using date_year() since not yet figured out how to extract a parsable full date from life event
-    def add_person(self, current: Person):
-#         print('Life_Lines_Creator: add_person: ', current.name)
-        if current.birth and current.lat_lon:
-            if current.lat_lon.lat is not None and current.lat_lon.lon is not None:
-#                 print('add_person: {} {},{}'.format(current.name, current.lat_lon.lat, current.lat_lon.lon))
-    #             print('kml_instance.add_point: ', current.name, current.lat_lon, current.birth.date)
-                description =  '{} {}<br>{}<br>'.format('Birth', current.birth.date_year(), current.birth.place)
-                placemark_id, point_id = self.kml_instance.add_point(current.name, current.lat_lon, current.birth.date_year(), description)
-    #             print('add_person: {} : id={}'.format(current.name, id))
+    def _add_point(self, current, event, event_type):
+        if event and getattr(event.location, 'lat_lon', None):
+            if event.location.lat_lon.lat is not None and event.location.lat_lon.lon is not None:
+                description =  '{} {}<br>{}<br>'.format(event_type, event.date_year(), event.place)
+                placemark_id, point_id = self.kml_instance.add_point(event_type, current.name, event.location.lat_lon, event.date_year(), description)
                 self.kml_point_to_person_lookup[point_id] = current.xref_id
                 self.kml_person_to_point_lookup[current.xref_id] = point_id
                 self.kml_person_to_placemark_lookup[current.xref_id] = placemark_id
 
-    # hyperlinks not yet working to go to target person
-    # in old code, the destination was a Placemark id
-    # currently here it is a Point id
-    # might want to try creating people pints inside Placemark using : simplekml.newplacemark()
+    # using date_year() since not yet figured out how to extract a parsable full date from life event
+    def add_person(self, current: Person):
+        if current.birth and getattr(current.birth.location, 'lat_lon', None):
+            self._add_point(current, current.birth, "Birth")
+        for marriage_event in current.marriages:
+            if marriage_event and getattr(marriage_event.location, 'lat_lon', None):
+                self._add_point(current, marriage_event, "Marriage")
+        if current.death and getattr(current.death.location, 'lat_lon', None):
+            self._add_point(current, current.death, "Death")
+
     def update_person_description(self, point: simplekml.featgeom.Point, current: Person):
         description = point.description
-        if current.birth and current.lat_lon:
-            # "Father: <a href=#I100;balloonFlyto>name</a>"
+        if current.birth and current.birth.location.lat_lon:
             if current.father and (current.father in self.kml_person_to_point_lookup):
-                # father_id = self.kml_person_to_point_lookup[current.father]
                 father_id = self.kml_person_to_placemark_lookup[current.father]
                 if father_id:
-                    if self.use_hyperlinks: # not working yet
+                    if self.use_hyperlinks:
                         description += 'Father: <a href=#{};balloonFlyto>{}</a><br>'.format(
-                            father_id, self.people[current.father].name)
+                            father_id, self.gedcom.people[current.father].name)
                     else:
-                        description += 'Father: {}<br>'.format(self.people[current.father].name)
+                        description += 'Father: {}<br>'.format(self.gedcom.people[current.father].name)
             if current.mother and (current.mother in self.kml_person_to_point_lookup):
                 mother_id = self.kml_person_to_placemark_lookup[current.mother]
                 if mother_id:
-                    if self.use_hyperlinks: # not working yet
+                    if self.use_hyperlinks:
                         description += 'Mother: <a href=#{};balloonFlyto>{}</a><br>'.format(
-                            mother_id, self.people[current.mother].name)
+                            mother_id, self.gedcom.people[current.mother].name)
                     else:
-                        description += 'Mother: {}<br>'.format(self.people[current.mother].name)
+                        description += 'Mother: {}<br>'.format(self.gedcom.people[current.mother].name)
             if current.children:
                 description += 'Children: '
                 for child in current.children:
                     if child in self.kml_person_to_placemark_lookup:
                         child_id = self.kml_person_to_placemark_lookup[child]
                         description += '<a href=#{};balloonFlyto>{}</a> '.format(
-                            child_id, self.people[child].name)
+                            child_id, self.gedcom.people[child].name)
                     else:
-                        description += '{} '.format(self.people[child].name)
+                        description += '{} '.format(self.gedcom.people[child].name)
             point.description = description
 
     def add_people(self):
-        # kml Geometry class used to create all geometry objects, however the "id" property is read-only
-        # therefore create all people points first, and store lookup-dict of IDs, then update with descriptions
-        # and relationships
+        # simplekml "id" property is read-only, so create all people points first, and store lookup-dict of IDs,
+        # then update with descriptions and relationships
 
-        for p in self.people.keys():
-            person = self.people[p]
+        for p in self.gedcom.people.keys():
+            person = self.gedcom.people[p]
             self.add_person(person)
 
         for g in self.kml_instance.kml.geometries:
-#         print('Containers:', self.kml_instance.kml.allgeometries)
-#         for g in self.kml_instance.kml.containers:
-#             print(g)
-            person = self.people[self.kml_point_to_person_lookup[g.id]]
+            person = self.gedcom.people[self.kml_point_to_person_lookup[g.id]]
             self.update_person_description(g, person)
 
     def connect_parents(self):
         line_name = ''
 
-        for p in self.people.keys():
-            person = self.people[p]
+        for p in self.gedcom.people.keys():
+            person = self.gedcom.people[p]
             if self.verbose: print('person: ', person)
 
             if person.lat_lon and person.lat_lon.lat is not None:
@@ -215,8 +170,7 @@ class KML_Life_Lines_Creator:
                         begin_date = person.birth.date_year()
 
                 if person.father:
-                    father = self.people[person.father]
-#                     print('father: ', father)
+                    father = self.gedcom.people[person.father]
                     if father.lat_lon and father.lat_lon.lat is not None:
                         end_date = None # initial value
                         if father.birth:
@@ -227,21 +181,19 @@ class KML_Life_Lines_Creator:
                                         simplekml.Color.blue)
 
                 if person.mother:
-                    mother = self.people[person.mother]
-#                     print('mother: ', mother)
+                    mother = self.gedcom.people[person.mother]
                     if mother.lat_lon and mother.lat_lon.lat is not None:
                         end_date = None # initial value
                         if mother.birth:
                             if mother.birth.date:
                                 end_date = mother.birth.date_year()
-#                         print('mother: {} : {},{}; {}'.format(mother,mother))
                         line_id = self.kml_instance.draw_line(line_name, person.lat_lon, mother.lat_lon,
                                         begin_date, end_date,
                                         simplekml.Color.red)
 
     def lookat_person(self, person_id: str):
-        if person_id in self.people.keys():
-            person = self.people[person_id]
+        if person_id in self.gedcom.people.keys():
+            person = self.gedcom.people[person_id]
             if person.lat_lon and person.lat_lon.lat is not None:
                 lat_lon = person.lat_lon
                 begin_year = person.birth.date_year() if person.birth and person.birth.date else None
@@ -249,5 +201,4 @@ class KML_Life_Lines_Creator:
                 self.kml_instance.lookat(lat_lon=lat_lon, begin_year=begin_year, end_year=end_year)
 
     def save_kml(self):
-#         print('Save KML')
         self.kml_instance.finalise()

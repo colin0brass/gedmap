@@ -8,6 +8,48 @@ from geopy.geocoders import Nominatim
 
 from lat_lon import LatLon
 
+class Location:
+    def __init__(self, used=0, latitude=None, longitude=None, country_code=None, country_name=None, continent=None, found_country=False, address=None,
+                 name=None, alt=None, country=None, type=None, class_=None, icon=None, place_id=None, boundry=None, size=None, importance=None):
+        self.used = used
+        self.latitude = latitude
+        self.longitude = longitude
+        self.lat_lon = LatLon(latitude, longitude) if (latitude is not None and longitude is not None) else None
+        self.country_code = country_code
+        self.country_name = country_name
+        self.continent = continent
+        self.found_country = found_country
+        self.address = address
+        self.name = name
+        self.alt = alt
+        self.country = country
+        self.type = type
+        self.class_ = class_
+        self.icon = icon
+        self.place_id = place_id
+        self.boundry = boundry
+        self.size = size
+        self.importance = importance
+
+    @classmethod
+    def from_dict(cls, d):
+        obj = cls()
+        for key, value in d.items():
+            # Map 'class' key to 'class_' attribute
+            if key == 'class':
+                setattr(obj, 'class_', value)
+            # Map 'lat' and 'long' to 'latitude' and 'longitude'
+            elif key == 'lat':
+                setattr(obj, 'latitude', value)
+            elif key == 'long':
+                setattr(obj, 'longitude', value)
+            else:
+                setattr(obj, key, value)
+        if "Latitude" in d and "Longitude" in d:
+            obj.lat_lon = LatLon(d["Latitude"], d["Longitude"])
+        obj.used = 0 # initialise to not used
+        return obj
+
 class Geocode:
     gecode_sleep_interval = 1 # insert a delay due to low request limit of free Nominatim service
 
@@ -117,7 +159,7 @@ class Geocode:
         
         return (place, country_code, country_name, found)
 
-    def geocode_place(self, place, country_code, country_name, found_country=False, address_depth=0):
+    def geocode_place(self, place, country_code, country_name, found_country=False, address_depth=0) -> Location | None:
         location = None
 
         if not place:
@@ -140,16 +182,16 @@ class Geocode:
                     time.sleep(self.gecode_sleep_interval)
 
         if geo_location:
-            location = {
-                'used': 1,
-                'found_country': found_country,
-                'country_code': country_code.upper(),
-                'country': country_name,
-                'continent': self.country_code_to_continent_dict.get(country_code, ''),
-                'latitude': geo_location.latitude,
-                'longitude': geo_location.longitude,
-                'address': geo_location.address
-            }
+            location = Location(
+                used=1,
+                latitude=geo_location.latitude,
+                longitude=geo_location.longitude,
+                country_code=country_code.upper(),
+                country_name=country_name,
+                continent=self.country_code_to_continent_dict.get(country_code, ''),
+                found_country=found_country,
+                address=geo_location.address
+            )
         else:
             if self.verbose: print(f"Failed to geocode {place}")
 
@@ -163,12 +205,12 @@ class Geocode:
 
         return location
 
-    def get_lat_lon(self, location):
-        if not location or 'latitude' not in location or 'longitude' not in location:
+    def get_lat_lon(self, location : Location) -> LatLon | None:
+        if not location or location.latitude is None or location.longitude is None:
             return None
-        return LatLon(location['latitude'], location['longitude'])
-    
-    def lookup_location(self, place):
+        return LatLon(location.latitude, location.longitude)
+
+    def lookup_location(self, place) -> Location | None:
         found_in_cache = False
         found_country = False
         location = None
@@ -177,15 +219,16 @@ class Geocode:
             return None
 
         if not self.always_geocode and (place.lower() in self.address_cache):
+            location = Location()
             # place_from_cache = self.address_cache[place.lower()]['address'].lower()
             if self.address_cache[place.lower()]['latitude'] and self.address_cache[place.lower()]['longitude']:
                 found_in_cache = True
-                location = self.address_cache[place.lower()]
+                location = Location.from_dict(self.address_cache[place.lower()])
                 self.address_cache[place.lower()]['used'] += 1
                 if self.verbose: print(f"Found cached location for {place}")
                 # Check if country is found in cache
                 (place_with_country, country_code, country_name, found_country) = self.get_place_and_countrycode(place.lower())
-                location['found_country'] = found_country
+                location.found_country = found_country
                 if self.verbose and not found_country:
                     print(f"Country not found in cache for {place}, using default country: {self.default_country}")
 
@@ -193,8 +236,15 @@ class Geocode:
             (place_with_country, country_code, country_name, found_country) = self.get_place_and_countrycode(place.lower())
             location = self.geocode_place(place_with_country, country_code, country_name, found_country, address_depth=0)
             if location is not None:
-                location['address'] = place.lower() # place_with_country
+                location.address = place.lower() # place_with_country
                 self.address_cache[place.lower()] = location
-                if self.verbose: print(f"Geocoded {place} to {location['latitude']}, {location['longitude']}")
+                if self.verbose: print(f"Geocoded {place} to {location.latitude}, {location.longitude}")
+
+        if location:
+            continent = location.continent if location else None
+            if not continent or continent.strip().lower() in ('', 'none'):
+                location.continent = self.geocoder.country_code_to_continent_dict.get(location.country_code, "Unknown")
+            if location.lat_lon is None:
+                location.lat_lon = LatLon(location.latitude, location.longitude) if (location.latitude is not None and location.longitude is not None) else None
 
         return location
