@@ -5,9 +5,11 @@ import simplekml as simplekml
 
 from lat_lon import LatLon
 from gedcom import GeolocatedGedcom, Person
-from no_new_attrs import StrictNoNewAttrs
 
-class KmlExporter(metaclass=StrictNoNewAttrs):
+class KmlExporter:
+    __slots__ = [
+        'kml_file', 'kml', 'kml_folders'
+    ]
     line_width = 2
     timespan_default_start_year = 1950
     timespan_default_range_years = 100
@@ -27,7 +29,6 @@ class KmlExporter(metaclass=StrictNoNewAttrs):
     def __init__(self, kml_file):
         self.kml_file = kml_file
         self.kml = simplekml.Kml()
-#         self.max_line_weight = 20
         self.kml_folders = dict()
 
         for marker_type in self.marker_style.keys():
@@ -49,7 +50,6 @@ class KmlExporter(metaclass=StrictNoNewAttrs):
     def add_point(self, marker_type: str, name: str, lat_lon: LatLon, timestamp: str, description: str):
         id = None
         if lat_lon.lat is not None and lat_lon.lon is not None:
-            # pnt = self.kml.newpoint(name=name,
             pnt = self.kml_folders[marker_type].newpoint(name=name,
                 coords=[(lat_lon.lon, lat_lon.lat)],
                 description=description)
@@ -57,7 +57,7 @@ class KmlExporter(metaclass=StrictNoNewAttrs):
                 pnt.timestamp.when = timestamp
             if marker_type in self.marker_style.keys():
                 pnt.style = self.marker_style[marker_type]['style']
-            point_id = pnt.id # this returns the ID of the point, however that is wrapped-up in a Placemark which has id+1
+            point_id = pnt.id
             placemark_id = pnt.placemark.id
         return placemark_id, point_id
 
@@ -72,7 +72,7 @@ class KmlExporter(metaclass=StrictNoNewAttrs):
             kml_line.timespan.end   = end_date
             kml_line.altitudemode   = simplekml.AltitudeMode.clamptoground
             kml_line.extrude        = 1
-            kml_line.tessellate     = 1 # this was needed before line was visible over terrain
+            kml_line.tessellate     = 1
             kml_line.style.linestyle.color  = colour
             kml_line.style.linestyle.width  = self.line_width
         return kml_line.id
@@ -84,10 +84,14 @@ class KmlExporter(metaclass=StrictNoNewAttrs):
                 altitude=altitude, range=range,
                 heading=heading, tilt=tilt
             )
-            self.kml.document.lookat = lookat # default lookat
+            self.kml.document.lookat = lookat
 
-class KML_Life_Lines_Creator(metaclass=StrictNoNewAttrs):
-    place_type_list = ['Birth', 'Marriage', 'Death'] # 'native'
+class KML_Life_Lines_Creator:
+    __slots__ = [
+        'kml_instance', 'gedcom', 'kml_point_to_person_lookup', 'kml_person_to_point_lookup',
+        'kml_person_to_placemark_lookup', 'use_hyperlinks', 'main_person_id', 'verbose'
+    ]
+    place_type_list = ['Birth', 'Marriage', 'Death']
 
     def __init__(self, kml_file, gedcom: GeolocatedGedcom, use_hyperlinks=True, main_person_id=None, verbose=False):
         self.kml_instance = KmlExporter(kml_file)
@@ -108,7 +112,6 @@ class KML_Life_Lines_Creator(metaclass=StrictNoNewAttrs):
                 self.kml_person_to_point_lookup[current.xref_id] = point_id
                 self.kml_person_to_placemark_lookup[current.xref_id] = placemark_id
 
-    # using date_year() since not yet figured out how to extract a parsable full date from life event
     def add_person(self, current: Person):
         if current.birth and getattr(current.birth, 'location', None) and getattr(current.birth.location, 'lat_lon', None):
             if current.birth.location.lat_lon.lat is not None and current.birth.location.lat_lon.lon is not None:
@@ -152,9 +155,6 @@ class KML_Life_Lines_Creator(metaclass=StrictNoNewAttrs):
         point.description = description
 
     def add_people(self):
-        # simplekml "id" property is read-only, so create all people points first, and store lookup-dict of IDs,
-        # then update with descriptions and relationships
-
         for p in self.gedcom.people.keys():
             person = self.gedcom.people[p]
             self.add_person(person)
@@ -172,7 +172,7 @@ class KML_Life_Lines_Creator(metaclass=StrictNoNewAttrs):
             if self.verbose: print('person: ', person)
 
             if person.lat_lon and person.lat_lon.lat is not None:
-                begin_date = None # initial value
+                begin_date = None
                 if person.birth:
                     if person.birth.date:
                         begin_date = person.birth.date_year()
@@ -181,7 +181,7 @@ class KML_Life_Lines_Creator(metaclass=StrictNoNewAttrs):
                     father = self.gedcom.people[person.father]
                     line_name = 'Father: {}'.format(father.name)
                     if father.lat_lon and father.lat_lon.lat is not None:
-                        end_date = None # initial value
+                        end_date = None
                         if father.birth:
                             if father.birth.date:
                                 end_date = father.birth.date_year()
@@ -193,7 +193,7 @@ class KML_Life_Lines_Creator(metaclass=StrictNoNewAttrs):
                     mother = self.gedcom.people[person.mother]
                     line_name = 'Mother: {}'.format(mother.name)
                     if mother.lat_lon and mother.lat_lon.lat is not None:
-                        end_date = None # initial value
+                        end_date = None
                         if mother.birth:
                             if mother.birth.date:
                                 end_date = mother.birth.date_year()

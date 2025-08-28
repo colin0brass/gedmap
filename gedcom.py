@@ -8,15 +8,24 @@ from ged4py.model import Record, NameRec
 from geocode import Geocode, Location
 
 from lat_lon import LatLon
-from no_new_attrs import StrictNoNewAttrs
 
-class LifeEvent(metaclass=StrictNoNewAttrs):
+class LifeEvent:
+    __slots__ = [
+        'place',
+        'date',
+        'what',
+        'record',
+        'location',
+        'lat_lon'
+    ]
+
     def __init__(self, place : str, atime, lat_lon : LatLon=None, what=None, record : Record=None):
         self.place = place
         self.date = atime
-        # self.lat_lon = lat_lon
         self.what = what
         self.record = record
+        self.location = None
+        self.lat_lon = lat_lon
 
     def __repr__(self):
         return '[ {} : {} ]'.format(self.date, self.place)
@@ -47,7 +56,23 @@ class LifeEvent(metaclass=StrictNoNewAttrs):
         return None
 
 
-class Person(metaclass=StrictNoNewAttrs):
+class Person:
+    __slots__ = [
+        'xref_id',
+        'name',
+        'father',
+        'mother',
+        'children',
+        'lat_lon',
+        'birth',
+        'death',
+        'marriages',
+        'firstname',
+        'surname',
+        'maidenname',
+        'sex'
+    ]
+
     def __init__(self, xref_id):
         self.xref_id = xref_id
         self.name = None
@@ -79,10 +104,14 @@ class Person(metaclass=StrictNoNewAttrs):
         return best_year
 
 
-class GedcomParser(metaclass=StrictNoNewAttrs):
-    default_country = 'England'
+class GedcomParser:
+    __slots__ = [
+        'gedcom_file',
+        'default_country',
+        'verbose'
+    ]
 
-    def __init__(self, gedcom_file=None, default_country=default_country, verbose=False):
+    def __init__(self, gedcom_file=None, default_country="England", verbose=False):
         self.gedcom_file = gedcom_file
         self.default_country = default_country
         self.verbose = verbose
@@ -187,7 +216,12 @@ class GedcomParser(metaclass=StrictNoNewAttrs):
 
         return full_place_dict
     
-class Gedcom(metaclass=StrictNoNewAttrs):
+class Gedcom:
+    __slots__ = [
+        'gedcom_parser',
+        'people',
+        'full_place_dict'
+    ]
     def __init__(self, gedcom_file=None, default_country='England', verbose=False):
         self.gedcom_parser = GedcomParser(
             gedcom_file=gedcom_file,
@@ -209,7 +243,12 @@ class Gedcom(metaclass=StrictNoNewAttrs):
         return self.full_place_dict
 
 
-class GeolocatedGedcom(Gedcom, metaclass=StrictNoNewAttrs):
+class GeolocatedGedcom(Gedcom):
+    __slots__ = [
+        'geocoder',
+        'always_geocode',
+        'full_place_dict'
+    ]
     def __init__(self, gedcom_file=None, geocoder=None, default_country='England', always_geocode=False, verbose=False, location_cache_file=None):
         super().__init__(gedcom_file, default_country, verbose)
         self.geocoder = geocoder

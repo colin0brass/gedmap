@@ -7,11 +7,14 @@ import yaml  # Add PyYAML to your requirements if not already present
 from geopy.geocoders import Nominatim
 
 from lat_lon import LatLon
-from no_new_attrs import StrictNoNewAttrs
 
-class Location(metaclass=StrictNoNewAttrs):
+class Location:
+    __slots__ = [
+        'used', 'lat_lon', 'country_code', 'country_name', 'continent', 'found_country', 'address',
+        'name', 'alt', 'country', 'region', 'type', 'class_', 'icon', 'place_id', 'boundry', 'size', 'importance'
+    ]
     def __init__(self, used=0, latitude=None, longitude=None, country_code=None, country_name=None, continent=None, found_country=False, address=None,
-                 name=None, alt=None, country=None, type=None, class_=None, icon=None, place_id=None, boundry=None, size=None, importance=None):
+                 name=None, alt=None, country=None, region=None, type=None, class_=None, icon=None, place_id=None, boundry=None, size=None, importance=None):
         self.used = used
         self.lat_lon = LatLon(latitude, longitude) if (latitude is not None and longitude is not None) else None
         self.country_code = country_code
@@ -22,6 +25,7 @@ class Location(metaclass=StrictNoNewAttrs):
         self.name = name
         self.alt = alt
         self.country = country
+        self.region = region
         self.type = type
         self.class_ = class_
         self.icon = icon
@@ -48,7 +52,13 @@ class Location(metaclass=StrictNoNewAttrs):
         obj.used = 0 # initialise to not used
         return obj
 
-class Geocode(metaclass=StrictNoNewAttrs):
+class Geocode:
+    __slots__ = [
+        'always_geocode', 'verbose', 'location_cache_file', 'additional_countries_codes_dict_to_add',
+        'additional_countries_to_add', 'country_substitutions', 'default_country', 'address_cache',
+        'geolocator', 'countrynames', 'countrynames_lower', 'country_name_to_code_dict',
+        'country_code_to_name_dict', 'country_code_to_continent_dict'
+    ]
     gecode_sleep_interval = 1 # insert a delay due to low request limit of free Nominatim service
 
     def __init__(self, cache_file, default_country=None, always_geocode=False, verbose=False, location_cache_file=None):
@@ -202,7 +212,7 @@ class Geocode(metaclass=StrictNoNewAttrs):
         return location
 
     def get_lat_lon(self, location : Location) -> LatLon | None:
-        if not location or location.lat_lon.latitude is None or location.lat_lon.longitude is None:
+        if not location or location.lat_lon is None or getattr(location.lat_lon, 'lat', None) is None or getattr(location.lat_lon, 'lon', None) is None:
             return None
         return location.lat_lon
 
@@ -237,6 +247,6 @@ class Geocode(metaclass=StrictNoNewAttrs):
         if location:
             continent = location.continent if location else None
             if not continent or continent.strip().lower() in ('', 'none'):
-                location.continent = self.geocoder.country_code_to_continent_dict.get(location.country_code, "Unknown")
+                location.continent = self.country_code_to_continent_dict.get(location.country_code, "Unknown")
 
         return location
