@@ -8,8 +8,9 @@ from ged4py.model import Record, NameRec
 from geocode import Geocode, Location
 
 from lat_lon import LatLon
+from no_new_attrs import NoNewAttrs
 
-class LifeEvent:
+class LifeEvent(metaclass=NoNewAttrs):
     def __init__(self, place : str, atime, lat_lon : LatLon=None, what=None, record : Record=None):
         self.place = place
         self.date = atime
@@ -46,7 +47,7 @@ class LifeEvent:
         return None
 
 
-class Person:
+class Person(metaclass=NoNewAttrs):
     def __init__(self, xref_id):
         self.xref_id = xref_id
         self.name = None
@@ -78,7 +79,7 @@ class Person:
         return best_year
 
 
-class GedcomParser:
+class GedcomParser(metaclass=NoNewAttrs):
     default_country = 'England'
 
     def __init__(self, gedcom_file=None, default_country=default_country, verbose=False):
@@ -189,7 +190,7 @@ class GedcomParser:
 
         return full_place_dict
     
-class Gedcom:
+class Gedcom(metaclass=NoNewAttrs):
     def __init__(self, gedcom_file=None, default_country='England', verbose=False):
         self.gedcom_parser = GedcomParser(
             gedcom_file=gedcom_file,
@@ -211,7 +212,7 @@ class Gedcom:
         return self.full_place_dict
 
 
-class GeolocatedGedcom(Gedcom):
+class GeolocatedGedcom(Gedcom, metaclass=NoNewAttrs):
     def __init__(self, gedcom_file=None, geocoder=None, default_country='England', always_geocode=False, verbose=False, location_cache_file=None):
         super().__init__(gedcom_file, default_country, verbose)
         self.geocoder = geocoder

@@ -7,8 +7,9 @@ import yaml  # Add PyYAML to your requirements if not already present
 from geopy.geocoders import Nominatim
 
 from lat_lon import LatLon
+from no_new_attrs import NoNewAttrs
 
-class Location:
+class Location(metaclass=NoNewAttrs):
     def __init__(self, used=0, latitude=None, longitude=None, country_code=None, country_name=None, continent=None, found_country=False, address=None,
                  name=None, alt=None, country=None, type=None, class_=None, icon=None, place_id=None, boundry=None, size=None, importance=None):
         self.used = used
@@ -50,7 +51,7 @@ class Location:
         obj.used = 0 # initialise to not used
         return obj
 
-class Geocode:
+class Geocode(metaclass=NoNewAttrs):
     gecode_sleep_interval = 1 # insert a delay due to low request limit of free Nominatim service
 
     def __init__(self, cache_file, default_country=None, always_geocode=False, verbose=False, location_cache_file=None):

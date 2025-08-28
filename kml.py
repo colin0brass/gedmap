@@ -5,8 +5,9 @@ import simplekml as simplekml
 
 from lat_lon import LatLon
 from gedcom import GeolocatedGedcom, Person
+from no_new_attrs import NoNewAttrs
 
-class KmlExporter:
+class KmlExporter(metaclass=NoNewAttrs):
     line_width = 2
     timespan_default_start_year = 1950
     timespan_default_range_years = 100
@@ -82,7 +83,7 @@ class KmlExporter:
             )
             self.kml.document.lookat = lookat # default lookat
 
-class KML_Life_Lines_Creator:
+class KML_Life_Lines_Creator(metaclass=NoNewAttrs):
     place_type_list = ['Birth', 'Marriage', 'Death'] # 'native'
 
     def __init__(self, kml_file, gedcom: GeolocatedGedcom, use_hyperlinks=True, main_person_id=None, verbose=False):

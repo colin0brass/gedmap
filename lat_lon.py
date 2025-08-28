@@ -1,3 +1,5 @@
+from no_new_attrs import NoNewAttrs
+
 class LatLon:
     def __init__(self, lat, lon):
         if lat and lat[0].isalpha():
