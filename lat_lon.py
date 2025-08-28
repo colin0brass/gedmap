@@ -1,6 +1,6 @@
-from no_new_attrs import NoNewAttrs
+from no_new_attrs import StrictNoNewAttrs
 
-class LatLon:
+class LatLon(metaclass=StrictNoNewAttrs):
     def __init__(self, lat, lon):
         if lat and lat[0].isalpha():
             lat = lat[1:] if lat[0] == 'N' else '-{}'.format(lat[1:])

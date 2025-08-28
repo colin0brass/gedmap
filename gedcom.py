@@ -8,13 +8,13 @@ from ged4py.model import Record, NameRec
 from geocode import Geocode, Location
 
 from lat_lon import LatLon
-from no_new_attrs import NoNewAttrs
+from no_new_attrs import StrictNoNewAttrs
 
-class LifeEvent(metaclass=NoNewAttrs):
+class LifeEvent(metaclass=StrictNoNewAttrs):
     def __init__(self, place : str, atime, lat_lon : LatLon=None, what=None, record : Record=None):
         self.place = place
         self.date = atime
-        self.lat_lon = lat_lon
+        # self.lat_lon = lat_lon
         self.what = what
         self.record = record
 
@@ -47,7 +47,7 @@ class LifeEvent(metaclass=NoNewAttrs):
         return None
 
 
-class Person(metaclass=NoNewAttrs):
+class Person(metaclass=StrictNoNewAttrs):
     def __init__(self, xref_id):
         self.xref_id = xref_id
         self.name = None
@@ -79,7 +79,7 @@ class Person(metaclass=NoNewAttrs):
         return best_year
 
 
-class GedcomParser(metaclass=NoNewAttrs):
+class GedcomParser(metaclass=StrictNoNewAttrs):
     default_country = 'England'
 
     def __init__(self, gedcom_file=None, default_country=default_country, verbose=False):
@@ -122,9 +122,6 @@ class GedcomParser(metaclass=NoNewAttrs):
         person.sex = record.sex
         person.birth = self.__get_event_location(record.sub_tag('BIRT'))
         person.death = self.__get_event_location(record.sub_tag('DEAT'))
-        # person.marriage = self.__get_event_location(record.sub_tag('MARR'))
-        # for marriage in record.sub_tags('MARR'):
-        #     person.marriage.append(self.__get_event_location(marriage))
 
         return person
 
@@ -190,7 +187,7 @@ class GedcomParser(metaclass=NoNewAttrs):
 
         return full_place_dict
     
-class Gedcom(metaclass=NoNewAttrs):
+class Gedcom(metaclass=StrictNoNewAttrs):
     def __init__(self, gedcom_file=None, default_country='England', verbose=False):
         self.gedcom_parser = GedcomParser(
             gedcom_file=gedcom_file,
@@ -212,7 +209,7 @@ class Gedcom(metaclass=NoNewAttrs):
         return self.full_place_dict
 
 
-class GeolocatedGedcom(Gedcom, metaclass=NoNewAttrs):
+class GeolocatedGedcom(Gedcom, metaclass=StrictNoNewAttrs):
     def __init__(self, gedcom_file=None, geocoder=None, default_country='England', always_geocode=False, verbose=False, location_cache_file=None):
         super().__init__(gedcom_file, default_country, verbose)
         self.geocoder = geocoder
@@ -220,7 +217,6 @@ class GeolocatedGedcom(Gedcom, metaclass=NoNewAttrs):
         self.full_place_dict = {}
 
         self._geolocate_all()
-
         self._parse_people()
 
     def _geolocate_all(self):
@@ -235,18 +231,25 @@ class GeolocatedGedcom(Gedcom, metaclass=NoNewAttrs):
 
     def _geolocate_people(self):
         for person in self.people.values():
+            found_location = False
             if person.birth:
                 event = self._geolocate_event(person.birth)
                 person.birth.location = event.location
-                # person.birth.lat_lon = event.lat_lon
-            if person.death:
-                event = self._geolocate_event(person.death)
-                person.death.location = event.location
-                # person.death.lat_lon = event.lat_lon
+                if not found_location and event.location:
+                    person.lat_lon = event.location.lat_lon
+                    found_location = True
             for marriage_event in person.marriages:
                 event = self._geolocate_event(marriage_event)
                 marriage_event.location = event.location
-                # marriage_event.lat_lon = event.lat_lon
+                if not found_location and event.location:
+                    person.lat_lon = event.location.lat_lon
+                    found_location = True
+            if person.death:
+                event = self._geolocate_event(person.death)
+                person.death.location = event.location
+                if not found_location and event.location:
+                    person.lat_lon = event.location.lat_lon
+                    found_location = True
 
     def _geolocate_event(self, event: LifeEvent) -> LifeEvent:
         record = getattr(event, 'record', None)

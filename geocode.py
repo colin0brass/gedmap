@@ -7,14 +7,12 @@ import yaml  # Add PyYAML to your requirements if not already present
 from geopy.geocoders import Nominatim
 
 from lat_lon import LatLon
-from no_new_attrs import NoNewAttrs
+from no_new_attrs import StrictNoNewAttrs
 
-class Location(metaclass=NoNewAttrs):
+class Location(metaclass=StrictNoNewAttrs):
     def __init__(self, used=0, latitude=None, longitude=None, country_code=None, country_name=None, continent=None, found_country=False, address=None,
                  name=None, alt=None, country=None, type=None, class_=None, icon=None, place_id=None, boundry=None, size=None, importance=None):
         self.used = used
-        self.latitude = latitude
-        self.longitude = longitude
         self.lat_lon = LatLon(latitude, longitude) if (latitude is not None and longitude is not None) else None
         self.country_code = country_code
         self.country_name = country_name
@@ -39,19 +37,18 @@ class Location(metaclass=NoNewAttrs):
             # Map 'class' key to 'class_' attribute
             if key == 'class':
                 setattr(obj, 'class_', value)
-            # Map 'lat' and 'long' to 'latitude' and 'longitude'
-            elif key == 'lat':
-                setattr(obj, 'latitude', value)
-            elif key == 'long':
-                setattr(obj, 'longitude', value)
+            elif key.lower() == 'latitude' or key.lower() == 'longitude':
+                continue
             else:
                 setattr(obj, key, value)
-        if "Latitude" in d and "Longitude" in d:
-            obj.lat_lon = LatLon(d["Latitude"], d["Longitude"])
+        lat_key = next((k for k in d.keys() if k.lower() == "latitude" or k.lower() == "lat"), None)
+        lon_key = next((k for k in d.keys() if k.lower() == "longitude" or k.lower() == "long"), None)
+        if lat_key and lon_key:
+            obj.lat_lon = LatLon(d[lat_key], d[lon_key])
         obj.used = 0 # initialise to not used
         return obj
 
-class Geocode(metaclass=NoNewAttrs):
+class Geocode(metaclass=StrictNoNewAttrs):
     gecode_sleep_interval = 1 # insert a delay due to low request limit of free Nominatim service
 
     def __init__(self, cache_file, default_country=None, always_geocode=False, verbose=False, location_cache_file=None):
@@ -146,7 +143,6 @@ class Geocode(metaclass=NoNewAttrs):
             for idx, name in enumerate(self.countrynames):
                 if name.lower() == last_place_element:
                     country_name = name
-                    # country_index = idx
                     break
 
         if not found:
@@ -185,8 +181,7 @@ class Geocode(metaclass=NoNewAttrs):
         if geo_location:
             location = Location(
                 used=1,
-                latitude=geo_location.latitude,
-                longitude=geo_location.longitude,
+                lat_lon = LatLon(geo_location.latitude, geo_location.longitude),
                 country_code=country_code.upper(),
                 country_name=country_name,
                 continent=self.country_code_to_continent_dict.get(country_code, ''),
@@ -207,9 +202,9 @@ class Geocode(metaclass=NoNewAttrs):
         return location
 
     def get_lat_lon(self, location : Location) -> LatLon | None:
-        if not location or location.latitude is None or location.longitude is None:
+        if not location or location.lat_lon.latitude is None or location.lat_lon.longitude is None:
             return None
-        return LatLon(location.latitude, location.longitude)
+        return location.lat_lon
 
     def lookup_location(self, place) -> Location | None:
         found_in_cache = False
@@ -221,13 +216,11 @@ class Geocode(metaclass=NoNewAttrs):
 
         if not self.always_geocode and (place.lower() in self.address_cache):
             location = Location()
-            # place_from_cache = self.address_cache[place.lower()]['address'].lower()
             if self.address_cache[place.lower()]['latitude'] and self.address_cache[place.lower()]['longitude']:
                 found_in_cache = True
                 location = Location.from_dict(self.address_cache[place.lower()])
                 self.address_cache[place.lower()]['used'] += 1
                 if self.verbose: print(f"Found cached location for {place}")
-                # Check if country is found in cache
                 (place_with_country, country_code, country_name, found_country) = self.get_place_and_countrycode(place.lower())
                 location.found_country = found_country
                 if self.verbose and not found_country:
@@ -239,13 +232,11 @@ class Geocode(metaclass=NoNewAttrs):
             if location is not None:
                 location.address = place.lower() # place_with_country
                 self.address_cache[place.lower()] = location
-                if self.verbose: print(f"Geocoded {place} to {location.latitude}, {location.longitude}")
+                if self.verbose: print(f"Geocoded {place} to {location.lat_lon}")
 
         if location:
             continent = location.continent if location else None
             if not continent or continent.strip().lower() in ('', 'none'):
                 location.continent = self.geocoder.country_code_to_continent_dict.get(location.country_code, "Unknown")
-            if location.lat_lon is None:
-                location.lat_lon = LatLon(location.latitude, location.longitude) if (location.latitude is not None and location.longitude is not None) else None
 
         return location
