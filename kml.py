@@ -13,8 +13,7 @@ import simplekml
 from location import LatLon
 from gedcom import GeolocatedGedcom, Person
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
 
 # Constants for marker icons

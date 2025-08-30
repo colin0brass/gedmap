@@ -15,7 +15,7 @@ from ged4py.model import Record, NameRec
 from geocode import Geocode
 from location import LatLon, Location
 
-logging.basicConfig(level=logging.ERROR)
+# Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
 
 class LifeEvent:
@@ -174,30 +174,22 @@ class GedcomParser:
     Attributes:
         gedcom_file (Optional[str]): Path to GEDCOM file.
         default_country (str): Default country for geocoding.
-        verbose (bool): Verbose output.
     """
     __slots__ = [
         'gedcom_file',
-        'default_country',
-        'verbose'
+        'default_country'
     ]
 
-    def __init__(self, gedcom_file: Optional[str] = None, default_country: str = "England", verbose: bool = False):
+    def __init__(self, gedcom_file: Optional[str] = None, default_country: str = "England"):
         """
         Initialize GedcomParser.
 
         Args:
             gedcom_file (Optional[str]): Path to GEDCOM file.
             default_country (str): Default country for geocoding.
-            verbose (bool): Verbose output.
         """
         self.gedcom_file = gedcom_file
         self.default_country = default_country
-
-        if verbose:
-            logger.setLevel(logging.INFO)
-        else:
-            logger.setLevel(logging.ERROR)
 
     def close(self):
         """Placeholder for compatibility."""
@@ -377,19 +369,17 @@ class Gedcom:
         'people',
         'full_place_dict'
     ]
-    def __init__(self, gedcom_file: Optional[str] = None, default_country: str = 'England', verbose: bool = False):
+    def __init__(self, gedcom_file: Optional[str] = None, default_country: str = 'England'):
         """
         Initialize Gedcom.
 
         Args:
             gedcom_file (Optional[str]): Path to GEDCOM file.
             default_country (str): Default country for geocoding.
-            verbose (bool): Verbose output.
         """
         self.gedcom_parser = GedcomParser(
             gedcom_file=gedcom_file,
-            default_country=default_country,
-            verbose=verbose
+            default_country=default_country
         )
         self.people: Dict[str, Person] = {}
         self.full_place_dict: Dict[str, dict] = {}
@@ -432,7 +422,7 @@ class GeolocatedGedcom(Gedcom):
         'always_geocode',
         'full_place_dict'
     ]
-    def __init__(self, gedcom_file: Optional[str] = None, geocoder: Optional[Geocode] = None, default_country: str = 'England', always_geocode: bool = False, verbose: bool = False, location_cache_file: Optional[str] = None):
+    def __init__(self, gedcom_file: Optional[str] = None, geocoder: Optional[Geocode] = None, default_country: str = 'England', always_geocode: bool = False, location_cache_file: Optional[str] = None):
         """
         Initialize GeolocatedGedcom.
 
@@ -441,10 +431,9 @@ class GeolocatedGedcom(Gedcom):
             geocoder (Optional[Geocode]): Geocode instance.
             default_country (str): Default country for geocoding.
             always_geocode (bool): Whether to always geocode.
-            verbose (bool): Verbose output.
             location_cache_file (Optional[str]): Location cache file.
         """
-        super().__init__(gedcom_file, default_country, verbose)
+        super().__init__(gedcom_file, default_country)
         self.geocoder = geocoder
         self.always_geocode = always_geocode
         self.full_place_dict: Dict[str, dict] = {}

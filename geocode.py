@@ -19,8 +19,7 @@ from geopy.geocoders import Nominatim
 
 from location import LatLon, Location
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
 
 def load_yaml_config(path: Path) -> dict:
@@ -48,7 +47,6 @@ class Geocode:
 
     Attributes:
         always_geocode (bool): Ignore cache if True.
-        verbose (bool): Verbose output.
         location_cache_file (str): Path to cache file.
         default_country (str): Default country for geocoding.
         address_cache (Dict[str, dict]): Cached addresses.
@@ -57,7 +55,7 @@ class Geocode:
         ... (other config attributes)
     """
     __slots__ = [
-        'always_geocode', 'verbose', 'location_cache_file', 'additional_countries_codes_dict_to_add',
+        'always_geocode', 'location_cache_file', 'additional_countries_codes_dict_to_add',
         'additional_countries_to_add', 'country_substitutions', 'default_country', 'address_cache',
         'geolocator', 'countrynames', 'countrynames_lower', 'country_name_to_code_dict',
         'country_code_to_name_dict', 'country_code_to_continent_dict', 'fallback_continent_map'
@@ -68,8 +66,7 @@ class Geocode:
         self,
         cache_file: str,
         default_country: Optional[str] = None,
-        always_geocode: bool = False,
-        verbose: bool = False
+        always_geocode: bool = False
     ):
         """
         Initialize the Geocode object, loading country info and cache.
@@ -78,7 +75,6 @@ class Geocode:
             cache_file (str): Path to cache file.
             default_country (Optional[str]): Default country.
             always_geocode (bool): Ignore cache if True.
-            verbose (bool): Verbose output.
         """
         self.always_geocode = always_geocode
         self.location_cache_file = cache_file
@@ -107,12 +103,6 @@ class Geocode:
         self.country_name_to_code_dict.update(self.additional_countries_codes_dict_to_add)
         self.country_code_to_name_dict = {v.upper(): k for k, v in self.country_name_to_code_dict.items()}
         self.country_code_to_continent_dict = {code: self.country_code_to_continent(code) for code in self.country_code_to_name_dict.keys()}
-
-        # Set logging level based on verbose flag
-        if verbose:
-            logger.setLevel(logging.INFO)
-        else:
-            logger.setLevel(logging.ERROR)
 
     def close(self) -> None:
         """
