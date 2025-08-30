@@ -32,3 +32,15 @@ country_substitutions:
   Himalayas: Bhutan
 
 default_country: England
+
+fallback_continent_map:
+  AQ: Antarctica
+  TF: Antarctica
+  EH: Africa
+  PN: Oceania
+  SX: North America
+  TL: Asia
+  UM: Oceania
+  VA: Europe
+  WI: North America
+  EU: Europe

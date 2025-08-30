@@ -1,0 +1,9 @@
+ged4py
+geopy
+pycountry
+pycountry-convert
+simplekml
+pandas
+seaborn
+matplotlib
+numpy

@@ -1,20 +1,90 @@
+"""
+geocode.py - Geocoding utilities for GEDCOM mapping.
+
+Handles geocoding, country/continent lookup, and caching of location results.
+Loads fallback continent mappings from geocode.yaml.
+"""
+
 import os
 import csv
 import time
+import logging
+from pathlib import Path
+from typing import Optional, Tuple, Dict
+
 import pycountry
 import pycountry_convert as pc
-import yaml  # Add PyYAML to your requirements if not already present
+import yaml  # Ensure PyYAML is installed
 from geopy.geocoders import Nominatim
 
 from lat_lon import LatLon
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def load_yaml_config(path: Path) -> dict:
+    """
+    Load YAML configuration from the given path.
+
+    Args:
+        path (Path): Path to the YAML file.
+
+    Returns:
+        dict: Parsed YAML configuration or empty dict if not found/error.
+    """
+    try:
+        with open(path, "r") as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError as e:
+        logger.warning(f"Could not load geocode.yaml: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error loading geocode.yaml: {e}")
+    return {}
+
 class Location:
+    """
+    Stores geocoded location information.
+
+    Attributes:
+        used (int): Usage count.
+        lat_lon (LatLon): Latitude/longitude.
+        country_code (str): Country code.
+        country_name (str): Country name.
+        continent (str): Continent name.
+        found_country (bool): Whether country was found.
+        address (str): Address string.
+        ... (other optional attributes)
+    """
     __slots__ = [
         'used', 'lat_lon', 'country_code', 'country_name', 'continent', 'found_country', 'address',
         'name', 'alt', 'country', 'region', 'type', 'class_', 'icon', 'place_id', 'boundry', 'size', 'importance'
     ]
-    def __init__(self, used=0, latitude=None, longitude=None, country_code=None, country_name=None, continent=None, found_country=False, address=None,
-                 name=None, alt=None, country=None, region=None, type=None, class_=None, icon=None, place_id=None, boundry=None, size=None, importance=None):
+    def __init__(
+        self,
+        used: int = 0,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
+        country_code: Optional[str] = None,
+        country_name: Optional[str] = None,
+        continent: Optional[str] = None,
+        found_country: bool = False,
+        address: Optional[str] = None,
+        name: Optional[str] = None,
+        alt: Optional[str] = None,
+        country: Optional[str] = None,
+        region: Optional[str] = None,
+        type: Optional[str] = None,
+        class_: Optional[str] = None,
+        icon: Optional[str] = None,
+        place_id: Optional[str] = None,
+        boundry: Optional[str] = None,
+        size: Optional[str] = None,
+        importance: Optional[str] = None
+    ):
+        """
+        Initialize a Location object with geocoded information.
+        """
         self.used = used
         self.lat_lon = LatLon(latitude, longitude) if (latitude is not None and longitude is not None) else None
         self.country_code = country_code
@@ -35,47 +105,84 @@ class Location:
         self.importance = importance
 
     @classmethod
-    def from_dict(cls, d):
+    def from_dict(cls, d: dict) -> "Location":
+        """
+        Create a Location object from a dictionary.
+
+        Args:
+            d (dict): Dictionary of location attributes.
+
+        Returns:
+            Location: Location instance.
+        """
         obj = cls()
         for key, value in d.items():
-            # Map 'class' key to 'class_' attribute
-            if key == 'class':
+            if key.lower() == 'class':
                 setattr(obj, 'class_', value)
-            elif key.lower() == 'latitude' or key.lower() == 'longitude':
+            elif key.lower() in ('latitude', 'longitude'):
                 continue
             else:
                 setattr(obj, key, value)
-        lat_key = next((k for k in d.keys() if k.lower() == "latitude" or k.lower() == "lat"), None)
-        lon_key = next((k for k in d.keys() if k.lower() == "longitude" or k.lower() == "long"), None)
+        lat_key = next((k for k in d.keys() if k.lower() in ("latitude", "lat")), None)
+        lon_key = next((k for k in d.keys() if k.lower() in ("longitude", "long")), None)
         if lat_key and lon_key:
             obj.lat_lon = LatLon(d[lat_key], d[lon_key])
-        obj.used = 0 # initialise to not used
+        obj.used = 0
         return obj
 
 class Geocode:
+    """
+    Handles geocoding and country/continent lookup for places.
+
+    Attributes:
+        always_geocode (bool): Ignore cache if True.
+        verbose (bool): Verbose output.
+        location_cache_file (str): Path to cache file.
+        default_country (str): Default country for geocoding.
+        address_cache (Dict[str, dict]): Cached addresses.
+        geolocator (Nominatim): Geopy geocoder instance.
+        fallback_continent_map (Dict[str, str]): Fallback continent mapping from YAML.
+        ... (other config attributes)
+    """
     __slots__ = [
         'always_geocode', 'verbose', 'location_cache_file', 'additional_countries_codes_dict_to_add',
         'additional_countries_to_add', 'country_substitutions', 'default_country', 'address_cache',
         'geolocator', 'countrynames', 'countrynames_lower', 'country_name_to_code_dict',
-        'country_code_to_name_dict', 'country_code_to_continent_dict'
+        'country_code_to_name_dict', 'country_code_to_continent_dict', 'fallback_continent_map'
     ]
-    gecode_sleep_interval = 1 # insert a delay due to low request limit of free Nominatim service
+    gecode_sleep_interval = 1  # Delay due to Nominatim request limit
 
-    def __init__(self, cache_file, default_country=None, always_geocode=False, verbose=False, location_cache_file=None):
+    def __init__(
+        self,
+        cache_file: str,
+        default_country: Optional[str] = None,
+        always_geocode: bool = False,
+        verbose: bool = False
+    ):
+        """
+        Initialize the Geocode object, loading country info and cache.
+
+        Args:
+            cache_file (str): Path to cache file.
+            default_country (Optional[str]): Default country.
+            always_geocode (bool): Ignore cache if True.
+            verbose (bool): Verbose output.
+        """
         self.always_geocode = always_geocode
-        self.verbose = verbose
-        self.location_cache_file = location_cache_file
+        self.location_cache_file = cache_file
 
-        # Load country info from geocode.yaml
-        with open(os.path.join(os.path.dirname(__file__), "geocode.yaml"), "r") as f:
-            geo_config = yaml.safe_load(f)
+        geo_yaml_path = Path(__file__).parent / "geocode.yaml"
+        geo_config = load_yaml_config(geo_yaml_path)
 
         self.additional_countries_codes_dict_to_add = geo_config.get('additional_countries_codes_dict_to_add', {})
         self.additional_countries_to_add = list(self.additional_countries_codes_dict_to_add.keys())
         self.country_substitutions = geo_config.get('country_substitutions', {})
         self.default_country = default_country or geo_config.get('default_country', 'England')
 
-        self.address_cache = {}
+        # Load fallback continent map from YAML if present, else use empty dict
+        self.fallback_continent_map: Dict[str, str] = geo_config.get('fallback_continent_map', {})
+
+        self.address_cache: Dict[str, dict] = {}
         self.read_address_cache()
 
         self.geolocator = Nominatim(user_agent="gedcom_geocoder")
@@ -89,51 +196,102 @@ class Geocode:
         self.country_code_to_name_dict = {v.upper(): k for k, v in self.country_name_to_code_dict.items()}
         self.country_code_to_continent_dict = {code: self.country_code_to_continent(code) for code in self.country_code_to_name_dict.keys()}
 
-    def close(self):
+        # Set logging level based on verbose flag
+        if verbose:
+            logger.setLevel(logging.INFO)
+        else:
+            logger.setLevel(logging.ERROR)
+
+    def close(self) -> None:
+        """
+        Save address cache if applicable.
+        """
         if self.location_cache_file:
             self.save_address_cache()
 
-    def read_address_cache(self):
+    def read_address_cache(self) -> None:
+        """
+        Read address cache from file.
+        """
         self.address_cache = {}
         if self.always_geocode:
-            print('Configured to ignore cache')
-        else:
-            if not os.path.exists(self.location_cache_file):
-                print('No location cache file found:', self.location_cache_file)
-            else:
-                with open(self.location_cache_file, newline='', encoding='utf-8') as f:
-                    csv_reader = csv.DictReader(f, dialect='excel')
-                    try:
-                        for line in csv_reader:
-                            key = line.get('address', '').lower()
-                            line['used'] = 0  # Initialize 'used' to 0 to count usage
-                            self.address_cache[key] = line
-                    except csv.Error as e:
-                        print('Error reading location cache file {}, line {}: {}'.format(
-                            self.location_cache_file, csv_reader.line_num, e))
-
-    def save_address_cache(self):
-        if not self.address_cache:
-            print('No address cache to save')
+            logger.info('Configured to ignore cache')
             return
-
-        with open(self.location_cache_file, 'w', newline='', encoding='utf-8') as f:
-            first_item = next(iter(self.address_cache.values()))
-            csv_writer = csv.DictWriter(f, fieldnames=first_item.keys(), dialect='excel')
-            csv_writer.writeheader()
-            for line in self.address_cache.values():
-                csv_writer.writerow(line)
-        print('Saved address cache to:', self.location_cache_file)
-
-    def country_code_to_continent(self, country_code):
+        if not self.location_cache_file or not os.path.exists(self.location_cache_file):
+            logger.info(f'No location cache file found: {self.location_cache_file}')
+            return
         try:
-            continent_code = pc.country_alpha2_to_continent_code(country_code)
+            with open(self.location_cache_file, newline='', encoding='utf-8') as f:
+                csv_reader = csv.DictReader(f, dialect='excel')
+                for line in csv_reader:
+                    key = line.get('address', '').lower()
+                    line['used'] = 0
+                    self.address_cache[key] = line
+        except FileNotFoundError as e:
+            logger.warning(f'Location cache file not found: {e}')
+        except csv.Error as e:
+            logger.error(f'CSV error reading location cache file {self.location_cache_file}: {e}')
+        except Exception as e:
+            logger.error(f'Error reading location cache file {self.location_cache_file}: {e}')
+
+    def save_address_cache(self) -> None:
+        """
+        Save address cache to file.
+        """
+        if not self.address_cache:
+            logger.info('No address cache to save')
+            return
+        try:
+            first_item = next(iter(self.address_cache.values()), None)
+            if not first_item:
+                logger.info('Address cache is empty, nothing to save.')
+                return
+            with open(self.location_cache_file, 'w', newline='', encoding='utf-8') as f:
+                csv_writer = csv.DictWriter(f, fieldnames=first_item.keys(), dialect='excel')
+                csv_writer.writeheader()
+                for line in self.address_cache.values():
+                    csv_writer.writerow(line)
+            logger.info(f'Saved address cache to: {self.location_cache_file}')
+        except FileNotFoundError as e:
+            logger.warning(f'Location cache file not found for saving: {e}')
+        except csv.Error as e:
+            logger.error(f'CSV error saving address cache: {e}')
+        except Exception as e:
+            logger.error(f'Error saving address cache: {e}')
+
+    def country_code_to_continent(self, country_code: str) -> Optional[str]:
+        """
+        Convert country code to continent name.
+
+        Args:
+            country_code (str): Country code.
+
+        Returns:
+            Optional[str]: Continent name or None.
+        """
+        code = country_code.upper()
+        # Use fallback mapping from YAML if present
+        if code in self.fallback_continent_map:
+            logger.debug(f"Using fallback continent map for code '{code}': {self.fallback_continent_map[code]}")
+            return self.fallback_continent_map[code]
+        try:
+            continent_code = pc.country_alpha2_to_continent_code(code)
             continent_name = pc.convert_continent_code_to_continent_name(continent_code)
             return continent_name
         except Exception:
-            return None
-    
-    def get_place_and_countrycode(self, place):
+            logger.warning(f"Could not convert country code '{country_code}' to continent.")
+            return "Unknown"
+
+    def get_place_and_countrycode(self, place: str) -> Tuple[str, str, str, bool]:
+        """
+        Given a place string, return (place, country_code, country_name, found).
+
+        Args:
+            place (str): Place string.
+
+        Returns:
+            Tuple[str, str, str, bool]: (place, country_code, country_name, found)
+        """
         found = False
         country_name = ''
 
@@ -142,7 +300,7 @@ class Geocode:
         for key in self.country_substitutions:
             if last_place_element.lower() == key.lower():
                 new_country = self.country_substitutions[key]
-                if self.verbose: print(f"Substituting country '{last_place_element}' with '{new_country}' in place '{place}'")
+                logger.info(f"Substituting country '{last_place_element}' with '{new_country}' in place '{place}'")
                 place = place.replace(last_place_element, new_country)
                 country_name = new_country
                 found = True
@@ -150,48 +308,60 @@ class Geocode:
 
         if last_place_element in self.countrynames_lower:
             found = True
-            for idx, name in enumerate(self.countrynames):
+            for name in self.countrynames:
                 if name.lower() == last_place_element:
                     country_name = name
                     break
 
-        if not found:
-            if self.default_country.lower() != 'none':
-                if self.verbose:
-                    print(f"Adding default country '{self.default_country}' to place '{place}'")
-                place = place + ', ' + self.default_country
-                country_name = self.default_country
+        if not found and self.default_country.lower() != 'none':
+            logger.info(f"Adding default country '{self.default_country}' to place '{place}'")
+            place = place + ', ' + self.default_country
+            country_name = self.default_country
 
-        country_code = self.country_name_to_code_dict[country_name] if country_name in self.country_name_to_code_dict else 'none'
-        
+        country_code = self.country_name_to_code_dict.get(country_name, 'none')
         return (place, country_code, country_name, found)
 
-    def geocode_place(self, place, country_code, country_name, found_country=False, address_depth=0) -> Location | None:
+    def geocode_place(self, place: str, country_code: str, country_name: str, found_country: bool = False, address_depth: int = 0) -> Optional[Location]:
+        """
+        Geocode a place string and return a Location object.
+
+        Args:
+            place (str): Place string.
+            country_code (str): Country code.
+            country_name (str): Country name.
+            found_country (bool): Whether country was found.
+            address_depth (int): Recursion depth for less precise geocoding.
+
+        Returns:
+            Optional[Location]: Location object or None.
+        """
         location = None
 
         if not place:
-            return None # No place to geocode
+            return None
 
         max_retries = 3
+        geo_location = None
         for attempt in range(max_retries):
             try:
                 geo_location = self.geolocator.geocode(place, country_codes=country_code, timeout=10)
                 time.sleep(self.gecode_sleep_interval)
-                break
+                if geo_location:
+                    break
             except Exception as e:
-                print(f"Error geocoding {place}: {e}")
+                logger.error(f"Error geocoding {place}: {e}")
                 if attempt < max_retries - 1:
-                    print(f"Retrying geocode for {place} (attempt {attempt+2}/{max_retries}) after {self.gecode_sleep_interval} seconds...")
+                    logger.info(f"Retrying geocode for {place} (attempt {attempt+2}/{max_retries}) after {self.gecode_sleep_interval} seconds...")
                     time.sleep(self.gecode_sleep_interval)
                 else:
-                    geo_location = None
-                    print(f"Giving up on geocoding {place} after {max_retries} attempts.")
+                    logger.error(f"Giving up on geocoding {place} after {max_retries} attempts.")
                     time.sleep(self.gecode_sleep_interval)
 
         if geo_location:
             location = Location(
                 used=1,
-                lat_lon = LatLon(geo_location.latitude, geo_location.longitude),
+                latitude=geo_location.latitude,
+                longitude=geo_location.longitude,
                 country_code=country_code.upper(),
                 country_name=country_name,
                 continent=self.country_code_to_continent_dict.get(country_code, ''),
@@ -199,24 +369,41 @@ class Geocode:
                 address=geo_location.address
             )
         else:
-            if self.verbose: print(f"Failed to geocode {place}")
+            logger.warning(f"Failed to geocode {place}")
 
-        if location is None:
-            if address_depth < 3:
-                if self.verbose: print(f"Retrying geocode for {place} with less precision")
-                parts = place.split(',')
-                if len(parts) > 1:
-                    less_precise_place = ','.join(parts[1:]).strip()
-                    location = self.geocode_place(less_precise_place, country_code, country_name, address_depth + 1)
+        if location is None and address_depth < 3:
+            logger.info(f"Retrying geocode for {place} with less precision")
+            parts = place.split(',')
+            if len(parts) > 1:
+                less_precise_place = ','.join(parts[1:]).strip()
+                location = self.geocode_place(less_precise_place, country_code, country_name, address_depth + 1)
 
         return location
 
-    def get_lat_lon(self, location : Location) -> LatLon | None:
-        if not location or location.lat_lon is None or getattr(location.lat_lon, 'lat', None) is None or getattr(location.lat_lon, 'lon', None) is None:
+    def get_lat_lon(self, location: Optional[Location]) -> Optional[LatLon]:
+        """
+        Return LatLon if valid, else None.
+
+        Args:
+            location (Optional[Location]): Location object.
+
+        Returns:
+            Optional[LatLon]: LatLon object or None.
+        """
+        if not location or not location.lat_lon or not location.lat_lon.is_valid():
             return None
         return location.lat_lon
 
-    def lookup_location(self, place) -> Location | None:
+    def lookup_location(self, place: str) -> Optional[Location]:
+        """
+        Lookup a place in the cache or geocode it.
+
+        Args:
+            place (str): Place string.
+
+        Returns:
+            Optional[Location]: Location object or None.
+        """
         found_in_cache = False
         found_country = False
         location = None
@@ -224,28 +411,38 @@ class Geocode:
         if not place:
             return None
 
-        if not self.always_geocode and (place.lower() in self.address_cache):
-            location = Location()
-            if self.address_cache[place.lower()]['latitude'] and self.address_cache[place.lower()]['longitude']:
+        place_lower = place.lower()
+        if not self.always_geocode and (place_lower in self.address_cache):
+            cache_entry = self.address_cache[place_lower]
+            if cache_entry.get('latitude') and cache_entry.get('longitude'):
                 found_in_cache = True
-                location = Location.from_dict(self.address_cache[place.lower()])
-                self.address_cache[place.lower()]['used'] += 1
-                if self.verbose: print(f"Found cached location for {place}")
-                (place_with_country, country_code, country_name, found_country) = self.get_place_and_countrycode(place.lower())
+                location = Location.from_dict(cache_entry)
+                cache_entry['used'] = int(cache_entry.get('used', 0)) + 1
+                logger.info(f"Found cached location for {place}")
+                (place_with_country, country_code, country_name, found_country) = self.get_place_and_countrycode(place_lower)
                 location.found_country = found_country
-                if self.verbose and not found_country:
-                    print(f"Country not found in cache for {place}, using default country: {self.default_country}")
+                if not found_country:
+                    logger.info(f"Country not found in cache for {place}, using default country: {self.default_country}")
 
         if not found_in_cache:
-            (place_with_country, country_code, country_name, found_country) = self.get_place_and_countrycode(place.lower())
+            (place_with_country, country_code, country_name, found_country) = self.get_place_and_countrycode(place_lower)
             location = self.geocode_place(place_with_country, country_code, country_name, found_country, address_depth=0)
             if location is not None:
-                location.address = place.lower() # place_with_country
-                self.address_cache[place.lower()] = location
-                if self.verbose: print(f"Geocoded {place} to {location.lat_lon}")
+                location.address = place_lower
+                self.address_cache[place_lower] = {
+                    'address': place_lower,
+                    'latitude': getattr(location.lat_lon, 'lat', ''),
+                    'longitude': getattr(location.lat_lon, 'lon', ''),
+                    'country_code': location.country_code,
+                    'country_name': location.country_name,
+                    'continent': location.continent,
+                    'found_country': location.found_country,
+                    'used': 1
+                }
+                logger.info(f"Geocoded {place} to {location.lat_lon}")
 
         if location:
-            continent = location.continent if location else None
+            continent = location.continent
             if not continent or continent.strip().lower() in ('', 'none'):
                 location.continent = self.country_code_to_continent_dict.get(location.country_code, "Unknown")
 
