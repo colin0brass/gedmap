@@ -298,6 +298,26 @@ class Geocode:
             return None
         return location.lat_lon
 
+    def separate_cached_locations(self, full_place_dict: Dict[str, dict]) -> Tuple[Dict[str, dict], Dict[str, dict]]:
+        """
+        Separate places into cached and non-cached.
+
+        Args:
+            full_place_dict (Dict[str, dict]): Full place dictionary.
+
+        Returns:
+            Tuple[Dict[str, dict], Dict[str, dict]]: (cached_places, non_cached_places)
+        """
+        cached_places = {}
+        non_cached_places = {}
+        for place, data in full_place_dict.items():
+            place_lower = place.lower()
+            if not self.always_geocode and (place_lower in self.address_cache):
+                cached_places[place] = data
+            else:
+                non_cached_places[place] = data
+        return (cached_places, non_cached_places)
+    
     def lookup_location(self, place: str) -> Optional[Location]:
         """
         Lookup a place in the cache or geocode it.

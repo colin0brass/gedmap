@@ -472,6 +472,8 @@ class GeolocatedGedcom(Gedcom):
         'always_geocode',
         'full_place_dict'
     ]
+    geolocate_all_logger_interval = 20
+    
     def __init__(self, gedcom_file: Optional[str] = None, geocoder: Optional[Geocode] = None, default_country: str = 'England', always_geocode: bool = False, location_cache_file: Optional[str] = None):
         """
         Initialize GeolocatedGedcom.
@@ -496,9 +498,20 @@ class GeolocatedGedcom(Gedcom):
         Geolocate all places in the GEDCOM file.
         """
         self.full_place_dict = self.gedcom_parser.get_full_place_dict()
-        for place, data in self.full_place_dict.items():
+        cached_places, non_cached_places = self.geocoder.separate_cached_locations(self.full_place_dict)
+        logger.info(f"Found {len(cached_places)} cached places, {len(non_cached_places)} non-cached places.")
+        logger.info(f"Geolocating {len(cached_places)} cached places...")
+        for place, data in cached_places.items():
             location = self.geocoder.lookup_location(place)
             self.full_place_dict[place]['location'] = location
+        num_non_cached_places = len(non_cached_places)
+        logger.info(f"Geolocating {num_non_cached_places} non-cached places...")
+        for idx, (place, data) in enumerate(non_cached_places.items(), 1):
+            location = self.geocoder.lookup_location(place)
+            self.full_place_dict[place]['location'] = location
+            if idx % self.geolocate_all_logger_interval == 0 or idx == num_non_cached_places:
+                logger.info(f"Geolocated {idx} of {num_non_cached_places} non-cached places...")
+        logger.info(f"Geolocation of all {len(self.full_place_dict)} places completed.")
 
     def _parse_people(self) -> None:
         """
