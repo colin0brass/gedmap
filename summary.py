@@ -97,8 +97,8 @@ def write_people_summary(args: Namespace, people: Dict[str, Any], output_file: s
                                      summary['death_continent']])
     except IOError as e:
         logger.error(f"Failed to write people summary to {output_file}: {e}")
-  
-def save_birth_death_heatmap(birth_death_countries_summary: Dict[Any, Any], output_image_file: str, gedcom_file_name: str) -> None:
+
+def save_birth_death_heatmap_matrix(birth_death_countries_summary: Dict[Any, Any], output_image_file: str, gedcom_file_name: str) -> None:
     """
     Generate and save a heatmap image showing birth/death country pairs by continent.
     Adds a footer with filename and total number of people.
@@ -321,7 +321,7 @@ def save_birth_death_heatmap(birth_death_countries_summary: Dict[Any, Any], outp
 def write_birth_death_countries_summary(args: Namespace, people: Dict[str, Any], output_file: str, gedcom_file_name: str) -> None:
     """
     Write a summary of birth and death countries to a CSV file.
-    Also generates a heatmap image showing birth/death country pairs by continent.
+    Also generates a heatmap matrix image showing birth/death country pairs by continent.
 
     Args:
         args (Namespace): Parsed CLI arguments.
@@ -359,5 +359,5 @@ def write_birth_death_countries_summary(args: Namespace, people: Dict[str, Any],
         logger.error(f"Failed to write birth/death countries summary to {output_file}: {e}")
 
     output_image_file = os.path.splitext(output_file)[0] + "_heatmap.png"
-    save_birth_death_heatmap(birth_death_countries_summary, output_image_file, gedcom_file_name)
-    logger.info(f"Saved heatmap image to {output_image_file}")
+    save_birth_death_heatmap_matrix(birth_death_countries_summary, output_image_file, gedcom_file_name)
+    logger.info(f"Saved heatmap matrix image to {output_image_file}")

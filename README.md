@@ -46,7 +46,7 @@ python gedmap.py <gedcom_file> [options]
 - `--always-geocode`: Ignore cache and always geocode
 - `--write_places_summary`: Save places summary as CSV
 - `--write_people_summary`: Save people summary as CSV
-- `--write_countries_summary`: Save countries summary and heatmap
+- `--write_countries_summary`: Save countries summary and heatmap matrix
 - `--write_all`: Save all summaries
 - `--verbose`: Enable verbose output
 
@@ -61,7 +61,7 @@ python gedmap.py family.ged --output_folder results --write_all --verbose
 - **KML file**: Visualize family events and relationships in Google Earth
 - **CSV summaries**: Places, people, and countries summaries
 - **Geocode cache**: Used for efficient repeated runs
-- **Heatmap images**: Birth/death country heatmaps
+- **Heatmap images**: Birth/death country heatmap matrixes
 
 ## Project Structure
 

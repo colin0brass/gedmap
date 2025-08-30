@@ -128,6 +128,12 @@ class Geocode:
                 for line in csv_reader:
                     key = line.get('address', '').lower()
                     line['used'] = 0
+                    # Normalize found_country to boolean
+                    found_country_val = line.get('found_country', '')
+                    if isinstance(found_country_val, str):
+                        line['found_country'] = found_country_val.lower() in ('true', '1')
+                    else:
+                        line['found_country'] = bool(found_country_val)
                     self.address_cache[key] = line
         except FileNotFoundError as e:
             logger.warning(f'Location cache file not found: {e}')
@@ -156,6 +162,9 @@ class Geocode:
                 csv_writer = csv.DictWriter(f, fieldnames=fieldnames, dialect='excel')
                 csv_writer.writeheader()
                 for line in self.address_cache.values():
+                    # Ensure 'found_country' is saved as 'True' or 'False' string
+                    if 'found_country' in line:
+                        line['found_country'] = 'True' if bool(line['found_country']) else 'False'
                     csv_writer.writerow(line)
             logger.info(f'Saved address cache to: {self.location_cache_file}')
         except FileNotFoundError as e:
@@ -271,7 +280,7 @@ class Geocode:
                 country_code=country_code.upper(),
                 country_name=country_name,
                 continent=self.country_code_to_continent_dict.get(country_code, ''),
-                found_country=found_country,
+                found_country=bool(found_country),
                 address=geo_location.address
             )
 
