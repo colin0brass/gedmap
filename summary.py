@@ -20,7 +20,7 @@ def write_places_summary(args: Namespace, full_geolocation_dict: Dict[str, Any],
     """
     Write a summary of all geolocated places to a CSV file.
     Each row contains: count, latitude, longitude, found_country, has_date,
-    place, country, continent.
+    place, country_name, continent.
 
     Args:
         args (Namespace): Parsed CLI arguments.
@@ -31,7 +31,7 @@ def write_places_summary(args: Namespace, full_geolocation_dict: Dict[str, Any],
         with open(output_file, 'w', newline='') as csvfile:
             csv_header = [
                 'count', 'latitude', 'longitude', 'found_country', 'has_date',
-                'place', 'country', 'continent'
+                'place', 'country_name', 'continent'
             ]
             csv_writer = csv.writer(csvfile, dialect='excel')
             csv_writer.writerow(csv_header)
@@ -41,11 +41,11 @@ def write_places_summary(args: Namespace, full_geolocation_dict: Dict[str, Any],
                 longitude = getattr(location.lat_lon, 'lon', '') if location and getattr(location, 'lat_lon', None) else ''
                 found_country = getattr(location, 'found_country', '') if location else ''
                 has_date = data.get('has_date', False)
-                country = getattr(location, 'country', '') if location else ''
+                country_name = getattr(location, 'country_name', '') if location else ''
                 continent = getattr(location, 'continent', '') if location else ''
                 r = [
                     data['count'], latitude, longitude, found_country, has_date,
-                    place, country, continent
+                    place, country_name, continent
                 ]
                 csv_writer.writerow(r)
     except IOError as e:
@@ -72,11 +72,11 @@ def write_people_summary(args: Namespace, people: Dict[str, Any], output_file: s
             'Name': person.name,
             'birth_place': birth_place,
             'birth_date': person.birth.date_year() if person.birth else '',
-            'birth_country': getattr(getattr(person.birth, 'location', None), 'country', '') if person.birth else '',
+            'birth_country': getattr(getattr(person.birth, 'location', None), 'country_name', '') if person.birth else '',
             'birth_continent': birth_continent,
             'death_place': person.death.place if person.death else '',
             'death_date': person.death.date_year() if person.death else '',
-            'death_country': getattr(getattr(person.death, 'location', None), 'country', '') if person.death else '',
+            'death_country': getattr(getattr(person.death, 'location', None), 'country_name', '') if person.death else '',
             'death_continent': getattr(getattr(person.death, 'location', None), 'continent', '') if person.death else ''
         })
 
@@ -335,9 +335,9 @@ def write_birth_death_countries_summary(args: Namespace, people: Dict[str, Any],
         birth_location = getattr(person.birth, 'location', None) if person.birth else None
         death_location = getattr(person.death, 'location', None) if person.death else None
 
-        birth_country = getattr(birth_location, 'country', 'none') if birth_location else 'none'
+        birth_country = getattr(birth_location, 'country_name', 'none') if birth_location else 'none'
         birth_country_continent = getattr(birth_location, 'continent', 'none') if birth_location else 'none'
-        death_country = getattr(death_location, 'country', 'none') if death_location else 'none'
+        death_country = getattr(death_location, 'country_name', 'none') if death_location else 'none'
         death_country_continent = getattr(death_location, 'continent', 'none') if death_location else 'none'
 
         key = (birth_country, death_country)
