@@ -144,12 +144,16 @@ class Geocode:
             logger.info('No address cache to save')
             return
         try:
-            first_item = next(iter(self.address_cache.values()), None)
-            if not first_item:
+            # Collect all fieldnames from all cache entries
+            all_fieldnames = set()
+            for entry in self.address_cache.values():
+                all_fieldnames.update(entry.keys())
+            fieldnames = list(all_fieldnames)
+            if not fieldnames:
                 logger.info('Address cache is empty, nothing to save.')
                 return
             with open(self.location_cache_file, 'w', newline='', encoding='utf-8') as f:
-                csv_writer = csv.DictWriter(f, fieldnames=first_item.keys(), dialect='excel')
+                csv_writer = csv.DictWriter(f, fieldnames=fieldnames, dialect='excel')
                 csv_writer.writeheader()
                 for line in self.address_cache.values():
                     csv_writer.writerow(line)
@@ -270,8 +274,6 @@ class Geocode:
                 found_country=found_country,
                 address=geo_location.address
             )
-        else:
-            logger.warning(f"Failed to geocode {place}")
 
         if location is None and address_depth < 3:
             logger.info(f"Retrying geocode for {place} with less precision")
