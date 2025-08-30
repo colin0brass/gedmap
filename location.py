@@ -172,7 +172,7 @@ class Location:
     """
     __slots__ = [
         'used', 'lat_lon', 'country_code', 'country_name', 'continent', 'found_country', 'address',
-        'name', 'alt', 'country', 'region', 'type', 'class_', 'icon', 'place_id', 'boundry', 'size', 'importance'
+        'name', 'alt', 'type', 'class_', 'icon', 'place_id', 'boundry', 'size', 'importance'
     ]
     def __init__(
         self,
@@ -186,8 +186,6 @@ class Location:
         address: Optional[str] = None,
         name: Optional[str] = None,
         alt: Optional[str] = None,
-        country: Optional[str] = None,
-        region: Optional[str] = None,
         type: Optional[str] = None,
         class_: Optional[str] = None,
         icon: Optional[str] = None,
@@ -208,8 +206,6 @@ class Location:
         self.address = address
         self.name = name
         self.alt = alt
-        self.country = country
-        self.region = region
         self.type = type
         self.class_ = class_
         self.icon = icon
