@@ -10,11 +10,12 @@ GEDCOM mapping and visualization
 
 - Parses GEDCOM files and extracts people, events, and places
 - Geocodes places using OpenStreetMap/Nominatim
-- Caches geocoding results for efficiency
+- Caches geocoding results for efficiency (cache file stored in output folder)
 - Exports birth, marriage, and death events as KML placemarks
 - Draws family relationship lines in KML (e.g., parent-child)
 - Generates summary statistics and visualizations (with pandas/seaborn/matplotlib)
 - Command-line interface for batch processing
+- Output files (KML, CSV summaries, cache) are placed in a configurable output folder
 
 ## Installation
 
@@ -32,36 +33,40 @@ GEDCOM mapping and visualization
 ## Usage
 
 ```sh
-python gedmap.py <path_to_gedcom_file> <output_kml_file> [options]
+python gedmap.py <gedcom_file> [options]
 ```
 
 ### Options
 
-- `--cache_file <file>`: Path to geocode cache file
+- `--output_folder <folder>`: Folder to put output files (default: `./output`)
+- `--geo_cache_filename <file>`: Path to geocode cache file (default: `geo_cache.csv` in output folder)
 - `--default_country <country>`: Default country for geocoding (default: England)
-- `--always_geocode`: Ignore cache and always geocode
+- `--always-geocode`: Ignore cache and always geocode
+- `--write_places_summary`: Save places summary as CSV
+- `--write_people_summary`: Save people summary as CSV
+- `--write_countries_summary`: Save countries summary and heatmap
+- `--write_all`: Save all summaries
 - `--verbose`: Enable verbose output
-- `--location_cache_file <file>`: Location cache file
-- `--use_hyperlinks`: Use hyperlinks in KML descriptions
-- `--main_person_id <id>`: Main person to focus camera on
 
 ### Example
 
 ```sh
-python gedmap.py family.ged family.kml --verbose --use_hyperlinks
+python gedmap.py family.ged --output_folder results --write_all --verbose
 ```
 
 ## Output
 
 - **KML file**: Visualize family events and relationships in Google Earth
-- **Summary statistics**: Optionally, generate CSV or plots of event distributions
+- **CSV summaries**: Places, people, and countries summaries
+- **Geocode cache**: Used for efficient repeated runs
+- **Heatmap images**: Birth/death country heatmaps
 
 ## Project Structure
 
 - `gedmap.py` — Main entry point
 - `gedcom.py` — GEDCOM parsing and data model
 - `geocode.py` — Geocoding and location cache
-- `lat_lon.py` — Latitude/longitude utilities
+- `location.py` — Location and LatLon classes
 - `kml.py` — KML export logic
 - `requirements.txt` — Python dependencies
 

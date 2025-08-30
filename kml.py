@@ -10,7 +10,7 @@ import datetime
 
 import simplekml
 
-from lat_lon import LatLon
+from location import LatLon
 from gedcom import GeolocatedGedcom, Person
 
 # Configure logging

@@ -17,7 +17,7 @@ import pycountry_convert as pc
 import yaml  # Ensure PyYAML is installed
 from geopy.geocoders import Nominatim
 
-from lat_lon import LatLon
+from location import LatLon, Location
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -41,94 +41,6 @@ def load_yaml_config(path: Path) -> dict:
     except Exception as e:
         logger.error(f"Unexpected error loading geocode.yaml: {e}")
     return {}
-
-class Location:
-    """
-    Stores geocoded location information.
-
-    Attributes:
-        used (int): Usage count.
-        lat_lon (LatLon): Latitude/longitude.
-        country_code (str): Country code.
-        country_name (str): Country name.
-        continent (str): Continent name.
-        found_country (bool): Whether country was found.
-        address (str): Address string.
-        ... (other optional attributes)
-    """
-    __slots__ = [
-        'used', 'lat_lon', 'country_code', 'country_name', 'continent', 'found_country', 'address',
-        'name', 'alt', 'country', 'region', 'type', 'class_', 'icon', 'place_id', 'boundry', 'size', 'importance'
-    ]
-    def __init__(
-        self,
-        used: int = 0,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None,
-        country_code: Optional[str] = None,
-        country_name: Optional[str] = None,
-        continent: Optional[str] = None,
-        found_country: bool = False,
-        address: Optional[str] = None,
-        name: Optional[str] = None,
-        alt: Optional[str] = None,
-        country: Optional[str] = None,
-        region: Optional[str] = None,
-        type: Optional[str] = None,
-        class_: Optional[str] = None,
-        icon: Optional[str] = None,
-        place_id: Optional[str] = None,
-        boundry: Optional[str] = None,
-        size: Optional[str] = None,
-        importance: Optional[str] = None
-    ):
-        """
-        Initialize a Location object with geocoded information.
-        """
-        self.used = used
-        self.lat_lon = LatLon(latitude, longitude) if (latitude is not None and longitude is not None) else None
-        self.country_code = country_code
-        self.country_name = country_name
-        self.continent = continent
-        self.found_country = found_country
-        self.address = address
-        self.name = name
-        self.alt = alt
-        self.country = country
-        self.region = region
-        self.type = type
-        self.class_ = class_
-        self.icon = icon
-        self.place_id = place_id
-        self.boundry = boundry
-        self.size = size
-        self.importance = importance
-
-    @classmethod
-    def from_dict(cls, d: dict) -> "Location":
-        """
-        Create a Location object from a dictionary.
-
-        Args:
-            d (dict): Dictionary of location attributes.
-
-        Returns:
-            Location: Location instance.
-        """
-        obj = cls()
-        for key, value in d.items():
-            if key.lower() == 'class':
-                setattr(obj, 'class_', value)
-            elif key.lower() in ('latitude', 'longitude'):
-                continue
-            else:
-                setattr(obj, key, value)
-        lat_key = next((k for k in d.keys() if k.lower() in ("latitude", "lat")), None)
-        lon_key = next((k for k in d.keys() if k.lower() in ("longitude", "long")), None)
-        if lat_key and lon_key:
-            obj.lat_lon = LatLon(d[lat_key], d[lon_key])
-        obj.used = 0
-        return obj
 
 class Geocode:
     """

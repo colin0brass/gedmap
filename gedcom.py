@@ -12,8 +12,8 @@ from typing import Dict, List, Optional
 from ged4py.parser import GedcomReader
 from ged4py.model import Record, NameRec
 
-from geocode import Geocode, Location
-from lat_lon import LatLon
+from geocode import Geocode
+from location import LatLon, Location
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
