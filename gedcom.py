@@ -5,7 +5,9 @@ Defines classes for representing people, life events, and parsing GEDCOM files.
 Supports geolocation integration and KML export.
 """
 
+import os
 import re
+import tempfile
 import logging
 from typing import Dict, List, Optional
 
@@ -180,6 +182,10 @@ class GedcomParser:
         'default_country'
     ]
 
+    LINE_RE = re.compile(
+        r'^(\d+)\s+(?:@[^@]+@\s+)?([A-Z0-9_]+)(.*)$'
+    )  # allow optional @xref@ before the tag
+
     def __init__(self, gedcom_file: Optional[str] = None, default_country: str = "England"):
         """
         Initialize GedcomParser.
@@ -188,12 +194,56 @@ class GedcomParser:
             gedcom_file (Optional[str]): Path to GEDCOM file.
             default_country (str): Default country for geocoding.
         """
-        self.gedcom_file = gedcom_file
+        self.gedcom_file = self.check_fix_gedcom(gedcom_file)
         self.default_country = default_country
 
     def close(self):
         """Placeholder for compatibility."""
         pass
+
+    def check_fix_gedcom(self, input_path: str) -> str:
+        """Fixes common issues in GEDCOM records."""
+        temp_fd, temp_path = tempfile.mkstemp(suffix='.ged')
+        os.close(temp_fd)
+        changed = self.fix_gedcom_conc_cont_levels(input_path, temp_path)
+        if changed:
+            logger.warning(f"Checked and made corrections to GEDCOM file '{input_path}' saved as {temp_path}")
+        return temp_path if changed else input_path
+
+    def fix_gedcom_conc_cont_levels(self, input_path: str, temp_path: str) -> bool:
+        """
+        Fixes GEDCOM continuity and structure levels.
+        These types of GEDCOM issues have been seen from Family Tree Maker exports.
+        If not fixed, they can cause failure to parse the GEDCOM file correctly.
+        """
+
+        cont_level = None
+        changed = False
+
+        try:
+            with open(input_path, 'r', encoding='utf-8', newline='') as infile, \
+                open(temp_path, 'w', encoding='utf-8', newline='') as outfile:
+                for raw in infile:
+                    line = raw.rstrip('\r\n')
+                    m = self.LINE_RE.match(line)
+                    if not m:
+                        outfile.write(raw)
+                        continue
+
+                    level_s, tag, rest = m.groups()
+                    level = int(level_s)
+
+                    if tag in ('CONC', 'CONT'):
+                        fixed_level = cont_level if cont_level is not None else level
+                        outfile.write(f"{fixed_level} {tag}{rest}\n")
+                        if fixed_level != level:
+                            changed = True
+                    else:
+                        cont_level = level + 1
+                        outfile.write(raw)
+        except IOError as e:
+            logger.error(f"Failed to fix GEDCOM file {input_path}: {e}")
+        return changed
 
     @staticmethod
     def get_place(record: Record, placetag: str = 'PLAC') -> Optional[str]:

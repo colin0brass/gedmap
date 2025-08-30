@@ -177,15 +177,14 @@ class KML_Life_Lines_Creator:
         kml_person_to_placemark_lookup (dict): Maps person IDs to placemark IDs.
         use_hyperlinks (bool): Whether to use hyperlinks in descriptions.
         main_person_id (Optional[str]): Main person to focus on.
-        verbose (bool): Verbose output.
     """
     __slots__ = [
         'kml_instance', 'gedcom', 'kml_point_to_person_lookup', 'kml_person_to_point_lookup',
-        'kml_person_to_placemark_lookup', 'use_hyperlinks', 'main_person_id', 'verbose'
+        'kml_person_to_placemark_lookup', 'use_hyperlinks', 'main_person_id'
     ]
     place_type_list = ['Birth', 'Marriage', 'Death']
 
-    def __init__(self, kml_file: str, gedcom: GeolocatedGedcom, use_hyperlinks: bool = True, main_person_id: Optional[str] = None, verbose: bool = False):
+    def __init__(self, gedcom: GeolocatedGedcom, kml_file: str, use_hyperlinks: bool = True, main_person_id: Optional[str] = None):
         """
         Initialize the KML life lines creator.
 
@@ -194,7 +193,6 @@ class KML_Life_Lines_Creator:
             gedcom (GeolocatedGedcom): Geolocated GEDCOM data.
             use_hyperlinks (bool): Use hyperlinks in descriptions.
             main_person_id (Optional[str]): Main person to focus on.
-            verbose (bool): Verbose output.
         """
         self.kml_instance = KmlExporter(kml_file)
         self.gedcom = gedcom
@@ -203,11 +201,6 @@ class KML_Life_Lines_Creator:
         self.kml_person_to_placemark_lookup = dict()
         self.use_hyperlinks = use_hyperlinks
         self.main_person_id = main_person_id
-
-        if verbose:
-            logger.setLevel(logging.INFO)
-        else:
-            logger.setLevel(logging.ERROR)
 
     def _add_point(self, current: Person, event, event_type: str) -> None:
         """
@@ -331,3 +324,52 @@ class KML_Life_Lines_Creator:
         Save the KML file to disk.
         """
         self.kml_instance.finalise()
+
+class KML_Life_Lines:
+    """
+    High-level wrapper for creating and saving KML life lines for a GEDCOM dataset.
+
+    This class uses KML_Life_Lines_Creator to add people, connect parents, set camera view,
+    and save the resulting KML file. It is intended to simplify the workflow for exporting
+    genealogical relationships to KML for visualization.
+
+    Attributes:
+        gedcom (GeolocatedGedcom): Geolocated GEDCOM data.
+        kml_file (str): Path to output KML file.
+        kml_life_lines_creator (KML_Life_Lines_Creator): Instance of the KML life lines creator.
+    """
+    __slots__ = ['gedcom', 'kml_file', 'kml_life_lines_creator']
+    def __init__(self, gedcom: GeolocatedGedcom, kml_file: str,
+                 connect_parents: bool = True, save: bool = True):
+        """
+        Initialize the KML_Life_Lines wrapper.
+
+        This sets up the KML life lines creator, adds people, optionally connects parents,
+        sets the camera view to the main person, and optionally saves the KML file.
+
+        Args:
+            gedcom (GeolocatedGedcom): Geolocated GEDCOM data.
+            kml_file (str): Path to output KML file.
+            connect_parents (bool, optional): Whether to draw parent-child lines. Defaults to True.
+            save (bool, optional): Whether to save the KML file immediately. Defaults to True.
+        """
+
+        # Create the KML life lines creator and add people to the KML
+        self.kml_life_lines_creator = KML_Life_Lines_Creator(gedcom=gedcom, kml_file=kml_file)
+        self.kml_life_lines_creator.add_people()
+
+        # Optionally connect parents with lines in the KML
+        if connect_parents:
+            self.kml_life_lines_creator.connect_parents()
+
+        # Optionally save the KML file immediately
+        if save:
+            self.kml_life_lines_creator.save_kml()
+
+    def save(self) -> None:
+        """
+        Save the KML file to disk.
+
+        This method calls the underlying KML_Life_Lines_Creator's save_kml method.
+        """
+        self.kml_life_lines_creator.save_kml()

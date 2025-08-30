@@ -4,12 +4,7 @@ gedmap.py - Main entry point for GEDCOM geolocation and KML export.
 Processes GEDCOM files, geocodes places, writes summaries, and generates KML output.
 """
 
-import os
-import re
-import csv
 import argparse
-import tempfile
-import shutil
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -20,7 +15,7 @@ import matplotlib.pyplot as plt
 
 from geocode import Geocode
 from gedcom import GeolocatedGedcom
-from kml import KML_Life_Lines_Creator
+from kml import KML_Life_Lines
 from summary import (
     write_places_summary,
     write_people_summary,
@@ -64,68 +59,6 @@ def get_arg_parser() -> argparse.ArgumentParser:
         help='Folder to put output files (default: ./output)')
     return parser
 
-LINE_RE = re.compile(
-    r'^(\d+)\s+(?:@[^@]+@\s+)?([A-Z0-9_]+)(.*)$'
-)  # allow optional @xref@ before the tag
-
-def fix_gedcom_conc_cont_levels(input_path: str) -> tuple[str, bool]:
-    """
-    Fixes GEDCOM files where CONC/CONT tags have incorrect levels.
-    Returns the path to the fixed file and whether any changes were made.
-
-    Args:
-        input_path (str): Path to input GEDCOM file.
-
-    Returns:
-        tuple[str, bool]: (Path to fixed file, whether changes were made)
-    """
-    logger = logging.getLogger(__name__)
-    temp_fd, temp_path = tempfile.mkstemp(suffix='.ged')
-    os.close(temp_fd)
-
-    cont_level = None
-    changed = False
-
-    try:
-        with open(input_path, 'r', encoding='utf-8', newline='') as infile, \
-             open(temp_path, 'w', encoding='utf-8', newline='') as outfile:
-            for raw in infile:
-                line = raw.rstrip('\r\n')
-                m = LINE_RE.match(line)
-                if not m:
-                    outfile.write(raw)
-                    continue
-
-                level_s, tag, rest = m.groups()
-                level = int(level_s)
-
-                if tag in ('CONC', 'CONT'):
-                    fixed_level = cont_level if cont_level is not None else level
-                    outfile.write(f"{fixed_level} {tag}{rest}\n")
-                    if fixed_level != level:
-                        changed = True
-                else:
-                    cont_level = level + 1
-                    outfile.write(raw)
-    except IOError as e:
-        logger.error(f"Failed to fix GEDCOM file {input_path}: {e}")
-    return temp_path, changed
-
-def write_kml(args: argparse.Namespace, gedcom: GeolocatedGedcom, output_file: str) -> None:
-    """
-    Generate a KML file from the geolocated GEDCOM data.
-    Adds people and parent connections to the KML.
-
-    Args:
-        args (argparse.Namespace): Parsed CLI arguments.
-        gedcom (GeolocatedGedcom): Geolocated GEDCOM data.
-        output_file (str): Output KML file path.
-    """
-    kml_life_lines_creator = KML_Life_Lines_Creator(output_file, gedcom, verbose=args.verbose)
-    kml_life_lines_creator.add_people()
-    kml_life_lines_creator.connect_parents()
-    kml_life_lines_creator.save_kml()
-
 def main() -> None:
     """
     Main entry point for the gedmap script.
@@ -137,41 +70,33 @@ def main() -> None:
         parser.error("At least one input file is required")
 
     # Configure logging before any logging calls
-    log_level = logging.INFO if args.verbose else logging.ERROR
+    log_level = logging.INFO if args.verbose else logging.WARNING
     logging.basicConfig(
         level=log_level,
         format='%(asctime)s %(levelname)s %(name)s: %(message)s'
     )
     logger = logging.getLogger(__name__)
 
-    output_folder = Path(args.output_folder)
+    output_folder = Path(args.output_folder).resolve()
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    for input_file in args.input_files:
-        # Support input_file as absolute or relative path
-        input_path = Path(input_file)
+    for gedcom_file in args.input_files:
+        # Support gedcom_file as absolute or relative path
+        input_path = Path(gedcom_file)
         if not input_path.is_absolute():
-            input_path = Path.cwd() / input_path
+            input_path = (Path.cwd() / input_path).resolve()
         base_file_name = input_path.stem
 
-        logger.info(f'Reading GEDCOM file: {input_path}')
-        fixed_gedcom_file, changed = fix_gedcom_conc_cont_levels(str(input_path))
-        if not changed:
-            gedcom_file = input_path
-        else:
-            # Save fixed GEDCOM file in the same directory as the input file
-            gedcom_file = input_path.parent / f"{base_file_name}_fixed.ged"
-            shutil.copyfile(fixed_gedcom_file, gedcom_file)
-            logger.info(f"Copied fixed GEDCOM file to {gedcom_file}")
-
-        logger.info('Geolocating all places...')
+        logger.info('Initialising geocoder...')
         geo_cache_path = input_path.parent / args.geo_cache_filename
+        geo_cache_path = geo_cache_path.resolve()
         geocoder = Geocode(
             str(geo_cache_path),
             args.default_country,
             args.always_geocode
         )
 
+        logger.info(f'Processing GEDCOM file: {gedcom_file}')
         my_gedcom = GeolocatedGedcom(
             gedcom_file=str(gedcom_file),
             geocoder=geocoder,
@@ -180,26 +105,32 @@ def main() -> None:
             location_cache_file=str(geo_cache_path)
         )
 
+        logger.info('Saving updated geo cache...')
         geocoder.save_address_cache()
 
-        logger.info('Writing KML file...')
         output_file = output_folder / f"{base_file_name}.kml"
-        write_kml(args, my_gedcom, str(output_file))
+        output_file = output_file.resolve()
+        logger.info(f'Writing KML to {output_file}')
+        kml_life_lines = KML_Life_Lines(gedcom=my_gedcom, kml_file=str(output_file),
+                                        connect_parents=True, save=True)
 
         if args.write_places_summary or args.write_all:
-            output_file = output_folder / f"{base_file_name}_places.csv"
-            logger.info(f"Writing places summary to {output_file}")
-            write_places_summary(args, my_gedcom.full_place_dict, str(output_file))
+            places_summary_file = output_folder / f"{base_file_name}_places.csv"
+            places_summary_file = places_summary_file.resolve()
+            logger.info(f"Writing places summary to {places_summary_file}")
+            write_places_summary(args, my_gedcom.full_place_dict, str(places_summary_file))
 
         if args.write_people_summary or args.write_all:
-            output_file = output_folder / f"{base_file_name}_people.csv"
-            logger.info(f"Writing people summary to {output_file}")
-            write_people_summary(args, my_gedcom.people, str(output_file))
+            people_summary_file = output_folder / f"{base_file_name}_people.csv"
+            people_summary_file = people_summary_file.resolve()
+            logger.info(f"Writing people summary to {people_summary_file}")
+            write_people_summary(args, my_gedcom.people, str(people_summary_file))
 
         if args.write_countries_summary or args.write_all:
-            output_file = output_folder / f"{base_file_name}_countries.csv"
-            logger.info(f"Writing countries summary to {output_file}")
-            write_birth_death_countries_summary(args, my_gedcom.people, str(output_file), base_file_name)
+            countries_summary_file = output_folder / f"{base_file_name}_countries.csv"
+            countries_summary_file = countries_summary_file.resolve()
+            logger.info(f"Writing countries summary to {countries_summary_file}")
+            write_birth_death_countries_summary(args, my_gedcom.people, str(countries_summary_file), base_file_name)
 
 if __name__ == "__main__":
     try:

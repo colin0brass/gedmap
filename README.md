@@ -9,6 +9,8 @@ GEDCOM mapping and visualization
 ## Features
 
 - Parses GEDCOM files and extracts people, events, and places
+- Checks the GEDCOM file and tries to fix if there are CONC/CONT level issues
+  (as seen sometimes from Family Tree Maker export)
 - Geocodes places using OpenStreetMap/Nominatim
 - Caches geocoding results for efficiency (cache file stored in output folder)
 - Exports birth, marriage, and death events as KML placemarks
@@ -76,4 +78,4 @@ MIT License
 
 ## Author
 
-Your Name
+Colin Osborne
