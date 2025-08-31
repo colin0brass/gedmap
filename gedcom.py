@@ -175,27 +175,23 @@ class GedcomParser:
 
     Attributes:
         gedcom_file (Optional[str]): Path to GEDCOM file.
-        default_country (str): Default country for geocoding.
     """
     __slots__ = [
-        'gedcom_file',
-        'default_country'
+        'gedcom_file'
     ]
 
     LINE_RE = re.compile(
         r'^(\d+)\s+(?:@[^@]+@\s+)?([A-Z0-9_]+)(.*)$'
     )  # allow optional @xref@ before the tag
 
-    def __init__(self, gedcom_file: Optional[str] = None, default_country: str = "England"):
+    def __init__(self, gedcom_file: Optional[str] = None):
         """
         Initialize GedcomParser.
 
         Args:
             gedcom_file (Optional[str]): Path to GEDCOM file.
-            default_country (str): Default country for geocoding.
         """
         self.gedcom_file = self.check_fix_gedcom(gedcom_file)
-        self.default_country = default_country
 
     def close(self):
         """Placeholder for compatibility."""
@@ -419,17 +415,15 @@ class Gedcom:
         'people',
         'full_place_dict'
     ]
-    def __init__(self, gedcom_file: Optional[str] = None, default_country: str = 'England'):
+    def __init__(self, gedcom_file: Optional[str] = None):
         """
         Initialize Gedcom.
 
         Args:
             gedcom_file (Optional[str]): Path to GEDCOM file.
-            default_country (str): Default country for geocoding.
         """
         self.gedcom_parser = GedcomParser(
-            gedcom_file=gedcom_file,
-            default_country=default_country
+            gedcom_file=gedcom_file
         )
         self.people: Dict[str, Person] = {}
         self.full_place_dict: Dict[str, dict] = {}
@@ -464,34 +458,41 @@ class GeolocatedGedcom(Gedcom):
 
     Attributes:
         geocoder (Geocode): Geocode instance.
-        always_geocode (bool): Whether to always geocode.
         full_place_dict (Dict[str, dict]): Dictionary of places.
     """
     __slots__ = [
         'geocoder',
-        'always_geocode',
         'full_place_dict'
     ]
     geolocate_all_logger_interval = 20
     
-    def __init__(self, gedcom_file: Optional[str] = None, geocoder: Optional[Geocode] = None, default_country: str = 'England', always_geocode: bool = False, location_cache_file: Optional[str] = None):
+    def __init__(
+            self,
+            gedcom_file: str,
+            location_cache_file: str,
+            default_country: Optional[str] = None,
+            always_geocode: Optional[bool] = False):
         """
         Initialize GeolocatedGedcom.
 
         Args:
-            gedcom_file (Optional[str]): Path to GEDCOM file.
-            geocoder (Optional[Geocode]): Geocode instance.
-            default_country (str): Default country for geocoding.
-            always_geocode (bool): Whether to always geocode.
-            location_cache_file (Optional[str]): Location cache file.
+            gedcom_file (str): Path to GEDCOM file.
+            location_cache_file (str): Location cache file.
+            default_country (Optional[str]): Default country for geocoding.
+            always_geocode (Optional[bool]): Whether to always geocode.
         """
-        super().__init__(gedcom_file, default_country)
-        self.geocoder = geocoder
-        self.always_geocode = always_geocode
+        super().__init__(gedcom_file)
+        self.geocoder = Geocode(cache_file=location_cache_file, default_country=default_country, always_geocode=always_geocode)
         self.full_place_dict: Dict[str, dict] = {}
 
         self._geolocate_all()
         self._parse_people()
+
+    def save_location_cache(self) -> None:
+        """
+        Save the location cache to the specified file.
+        """
+        self.geocoder.save_address_cache()
 
     def _geolocate_all(self) -> None:
         """

@@ -31,7 +31,7 @@ country_substitutions:
   France and Flanders: Belgium
   Himalayas: Bhutan
 
-default_country: England
+default_country: None
 
 fallback_continent_map:
   AQ: Antarctica

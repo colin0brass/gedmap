@@ -23,7 +23,6 @@ from summary import (
 )
 
 # Constants
-DEFAULT_COUNTRY = 'England'
 GEO_CACHE_FILENAME = 'geo_cache.csv'
 
 def get_arg_parser() -> argparse.ArgumentParser:
@@ -39,8 +38,8 @@ def get_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument('input_files', type=str, nargs='+',
         help='One or more GEDCOM files to process')
-    parser.add_argument('--default_country', type=str, default=DEFAULT_COUNTRY,
-        help='Default country for geocoding, or "none" to disable')
+    parser.add_argument('--default_country', type=str,
+        help='Default country for geocoding, e.g. "England"')
     parser.add_argument('--always-geocode', action='store_true',
         help='Always geocode, ignore cache')
     parser.add_argument('--geo_cache_filename', type=str, default=GEO_CACHE_FILENAME,
@@ -87,26 +86,18 @@ def main() -> None:
             input_path = (Path.cwd() / input_path).resolve()
         base_file_name = input_path.stem
 
-        logger.info('Initialising geocoder...')
+        logger.info(f'Processing GEDCOM file: {gedcom_file}')
         geo_cache_path = input_path.parent / args.geo_cache_filename
         geo_cache_path = geo_cache_path.resolve()
-        geocoder = Geocode(
-            str(geo_cache_path),
-            args.default_country,
-            args.always_geocode
-        )
-
-        logger.info(f'Processing GEDCOM file: {gedcom_file}')
         my_gedcom = GeolocatedGedcom(
             gedcom_file=str(gedcom_file),
-            geocoder=geocoder,
+            location_cache_file=str(geo_cache_path),
             default_country=args.default_country,
-            always_geocode=args.always_geocode,
-            location_cache_file=str(geo_cache_path)
+            always_geocode=args.always_geocode
         )
 
         logger.info('Saving updated geo cache...')
-        geocoder.save_address_cache()
+        my_gedcom.save_location_cache()
 
         output_file = output_folder / f"{base_file_name}.kml"
         output_file = output_file.resolve()
