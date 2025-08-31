@@ -30,6 +30,8 @@ country_substitutions:
   Palestine: "Palestine, State of"
   France and Flanders: Belgium
   Himalayas: Bhutan
+  Russia: Russian Federation
+  u.s.a.: USA
 
 default_country: None
 

@@ -44,6 +44,8 @@ def get_arg_parser() -> argparse.ArgumentParser:
         help='Always geocode, ignore cache')
     parser.add_argument('--geo_cache_filename', type=str, default=GEO_CACHE_FILENAME,
         help='Geo-location cache filename to use')
+    parser.add_argument('--use_alt_places', action='store_true',
+        help='Use alternative place names from file (<input_filename>_cache.csv)')
     parser.add_argument('--write_places_summary', action='store_true',
         help='Save places summary as CSV')
     parser.add_argument('--write_people_summary', action='store_true',
@@ -93,7 +95,8 @@ def main() -> None:
             gedcom_file=str(gedcom_file),
             location_cache_file=str(geo_cache_path),
             default_country=args.default_country,
-            always_geocode=args.always_geocode
+            always_geocode=args.always_geocode,
+            use_alt_places=args.use_alt_places
         )
 
         logger.info('Saving updated geo cache...')

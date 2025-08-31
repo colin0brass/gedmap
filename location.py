@@ -168,11 +168,12 @@ class Location:
         continent (str): Continent name.
         found_country (bool): Whether country was found.
         address (str): Address string.
+        alt_addr (str): Alternative address string.
         ... (other optional attributes)
     """
     __slots__ = [
         'used', 'lat_lon', 'country_code', 'country_name', 'continent', 'found_country', 'address',
-        'name', 'alt', 'type', 'class_', 'icon', 'place_id', 'boundry', 'size', 'importance'
+        'alt_addr', 'type', 'class_', 'icon', 'place_id', 'boundry', 'size', 'importance'
     ]
     def __init__(
         self,
@@ -182,10 +183,9 @@ class Location:
         country_code: Optional[str] = None,
         country_name: Optional[str] = None,
         continent: Optional[str] = None,
-        found_country: bool = False,
+        found_country: Optional[bool] = False,
         address: Optional[str] = None,
-        name: Optional[str] = None,
-        alt: Optional[str] = None,
+        alt_addr: Optional[str] = None,
         type: Optional[str] = None,
         class_: Optional[str] = None,
         icon: Optional[str] = None,
@@ -204,8 +204,7 @@ class Location:
         self.continent = continent
         self.found_country = found_country
         self.address = address
-        self.name = name
-        self.alt = alt
+        self.alt_addr = alt_addr
         self.type = type
         self.class_ = class_
         self.icon = icon
@@ -231,6 +230,10 @@ class Location:
                 setattr(obj, 'class_', value)
             elif key.lower() in ('latitude', 'longitude'):
                 continue
+            elif key.lower() == 'place':
+                setattr(obj, 'address', value)
+            elif key.lower() == 'alt_place':
+                setattr(obj, 'alt_addr', value)
             else:
                 setattr(obj, key, value)
         lat_key = next((k for k in d.keys() if k.lower() in ("latitude", "lat")), None)

@@ -71,10 +71,12 @@ def write_people_summary(args: Namespace, people: Dict[str, Any], output_file: s
             'ID': person_id,
             'Name': person.name,
             'birth_place': birth_place,
+            'birth_alt_addr': getattr(getattr(person.birth, 'location', None), 'alt_addr', '') if person.birth else '',
             'birth_date': person.birth.date_year() if person.birth else '',
             'birth_country': getattr(getattr(person.birth, 'location', None), 'country_name', '') if person.birth else '',
             'birth_continent': birth_continent,
             'death_place': person.death.place if person.death else '',
+            'death_alt_addr': getattr(getattr(person.death, 'location', None), 'alt_addr', '') if person.death else '',
             'death_date': person.death.date_year() if person.death else '',
             'death_country': getattr(getattr(person.death, 'location', None), 'country_name', '') if person.death else '',
             'death_continent': getattr(getattr(person.death, 'location', None), 'continent', '') if person.death else ''
@@ -83,15 +85,17 @@ def write_people_summary(args: Namespace, people: Dict[str, Any], output_file: s
     try:
         with open(output_file, 'w', newline='') as csvfile:
             csv_writer = csv.writer(csvfile, dialect='excel')
-            csv_writer.writerow(['ID', 'Name', 'birth_place', 'birth_date', 'birth_country', 'birth_continent', 'death_place', 'death_date', 'death_country', 'death_continent'])
+            csv_writer.writerow(['ID', 'Name', 'birth_place', 'birth_alt_addr', 'birth_date', 'birth_country', 'birth_continent', 'death_place', 'death_alt_addr', 'death_date', 'death_country', 'death_continent'])
             for summary in people_summary:
                 csv_writer.writerow([summary['ID'],
                                      summary['Name'],
                                      summary['birth_place'],
+                                     summary['birth_alt_addr'],
                                      summary['birth_date'],
                                      summary['birth_country'],
                                      summary['birth_continent'],
                                      summary['death_place'],
+                                     summary['death_alt_addr'],
                                      summary['death_date'],
                                      summary['death_country'],
                                      summary['death_continent']])

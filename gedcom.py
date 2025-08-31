@@ -6,9 +6,11 @@ Supports geolocation integration and KML export.
 """
 
 import os
+import csv
 import re
 import tempfile
 import logging
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from ged4py.parser import GedcomReader
@@ -462,7 +464,8 @@ class GeolocatedGedcom(Gedcom):
     """
     __slots__ = [
         'geocoder',
-        'full_place_dict'
+        'full_place_dict',
+        'alt_place_file_path'
     ]
     geolocate_all_logger_interval = 20
     
@@ -471,7 +474,9 @@ class GeolocatedGedcom(Gedcom):
             gedcom_file: str,
             location_cache_file: str,
             default_country: Optional[str] = None,
-            always_geocode: Optional[bool] = False):
+            always_geocode: Optional[bool] = False,
+            use_alt_places: Optional[bool] = False
+    ):
         """
         Initialize GeolocatedGedcom.
 
@@ -480,9 +485,19 @@ class GeolocatedGedcom(Gedcom):
             location_cache_file (str): Location cache file.
             default_country (Optional[str]): Default country for geocoding.
             always_geocode (Optional[bool]): Whether to always geocode.
+            use_alt_places (Optional[bool]): Whether to use alternative place names.
         """
         super().__init__(gedcom_file)
-        self.geocoder = Geocode(cache_file=location_cache_file, default_country=default_country, always_geocode=always_geocode)
+        input_path = Path(gedcom_file).parent
+        base_file_name = Path(gedcom_file).stem
+        alt_place_file_path = input_path / f"{base_file_name}_cache.csv"
+        alt_place_file_path = alt_place_file_path.resolve() if use_alt_places else None
+        self.geocoder = Geocode(
+            cache_file=location_cache_file,
+            default_country=default_country,
+            always_geocode=always_geocode,
+            alt_place_file_path=alt_place_file_path if use_alt_places else None
+        )
         self.full_place_dict: Dict[str, dict] = {}
 
         self._geolocate_all()
@@ -492,13 +507,47 @@ class GeolocatedGedcom(Gedcom):
         """
         Save the location cache to the specified file.
         """
-        self.geocoder.save_address_cache()
+        self.geocoder.save_geo_cache()
+
+    def write_full_place_dict_csv(self, output_file: str) -> None:
+        """
+        Write self.full_place_dict to a CSV file for inspection.
+
+        Args:
+            output_file (str): Path to the output CSV file.
+        """
+        if not self.full_place_dict:
+            logger.warning("No places to write to CSV.")
+            return
+
+        # Collect all possible keys for CSV columns
+        fieldnames = set()
+        for data in self.full_place_dict.values():
+            fieldnames.update(data.keys())
+            # If 'location' is present, flatten its attributes
+            if 'location' in data and data['location']:
+                fieldnames.update(vars(data['location']).keys())
+        fieldnames = list(fieldnames)
+
+        with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for place, data in self.full_place_dict.items():
+                row = data.copy()
+                # Flatten location attributes if present
+                if 'location' in data and data['location']:
+                    location_attrs = vars(data['location'])
+                    for k, v in location_attrs.items():
+                        row[k] = v
+                writer.writerow(row)
+        logger.info(f"Wrote full_place_dict to CSV: {output_file}")
 
     def _geolocate_all(self) -> None:
         """
         Geolocate all places in the GEDCOM file.
         """
         self.full_place_dict = self.gedcom_parser.get_full_place_dict()
+        self.write_full_place_dict_csv('full_place_dict_before_geocode.csv')
         cached_places, non_cached_places = self.geocoder.separate_cached_locations(self.full_place_dict)
         logger.info(f"Found {len(cached_places)} cached places, {len(non_cached_places)} non-cached places.")
         logger.info(f"Geolocating {len(cached_places)} cached places...")
@@ -507,6 +556,8 @@ class GeolocatedGedcom(Gedcom):
             self.full_place_dict[place]['location'] = location
         num_non_cached_places = len(non_cached_places)
         logger.info(f"Geolocating {num_non_cached_places} non-cached places...")
+        for place in non_cached_places:
+            logger.info(f"- {place}...")
         for idx, (place, data) in enumerate(non_cached_places.items(), 1):
             location = self.geocoder.lookup_location(place)
             self.full_place_dict[place]['location'] = location
