@@ -112,6 +112,10 @@ def save_birth_death_heatmap_matrix(birth_death_countries_summary: Dict[Any, Any
         output_image_file (str): Output image file path.
         gedcom_file_name (str): GEDCOM file name for labeling.
     """
+    if not birth_death_countries_summary:
+        logger.warning(f"No data to plot for birth/death country heatmap: {output_image_file}")
+        return
+
     # Prepare data for DataFrame
     records = []
     for (birth_country, death_country), data in birth_death_countries_summary.items():

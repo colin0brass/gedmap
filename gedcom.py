@@ -186,12 +186,12 @@ class GedcomParser:
         r'^(\d+)\s+(?:@[^@]+@\s+)?([A-Z0-9_]+)(.*)$'
     )  # allow optional @xref@ before the tag
 
-    def __init__(self, gedcom_file: Optional[str] = None):
+    def __init__(self, gedcom_file: Path = None):
         """
         Initialize GedcomParser.
 
         Args:
-            gedcom_file (Optional[str]): Path to GEDCOM file.
+            gedcom_file (Path): Path to GEDCOM file.
         """
         self.gedcom_file = self.check_fix_gedcom(gedcom_file)
 
@@ -199,7 +199,7 @@ class GedcomParser:
         """Placeholder for compatibility."""
         pass
 
-    def check_fix_gedcom(self, input_path: str) -> str:
+    def check_fix_gedcom(self, input_path: Path) -> Path:
         """Fixes common issues in GEDCOM records."""
         temp_fd, temp_path = tempfile.mkstemp(suffix='.ged')
         os.close(temp_fd)
@@ -208,7 +208,7 @@ class GedcomParser:
             logger.warning(f"Checked and made corrections to GEDCOM file '{input_path}' saved as {temp_path}")
         return temp_path if changed else input_path
 
-    def fix_gedcom_conc_cont_levels(self, input_path: str, temp_path: str) -> bool:
+    def fix_gedcom_conc_cont_levels(self, input_path: Path, temp_path: Path) -> bool:
         """
         Fixes GEDCOM continuity and structure levels.
         These types of GEDCOM issues have been seen from Family Tree Maker exports.
@@ -364,7 +364,7 @@ class GedcomParser:
         """
         people = {}
         try:
-            with GedcomReader(self.gedcom_file) as parser:
+            with GedcomReader(str(self.gedcom_file)) as parser:
                 records = parser.records0
                 people = self.__create_people(records)
                 people = self.__add_marriages(people, records)
@@ -417,12 +417,12 @@ class Gedcom:
         'people',
         'full_place_dict'
     ]
-    def __init__(self, gedcom_file: Optional[str] = None):
+    def __init__(self, gedcom_file: Path):
         """
         Initialize Gedcom.
 
         Args:
-            gedcom_file (Optional[str]): Path to GEDCOM file.
+            gedcom_file (Path): Path to GEDCOM file.
         """
         self.gedcom_parser = GedcomParser(
             gedcom_file=gedcom_file
@@ -471,11 +471,12 @@ class GeolocatedGedcom(Gedcom):
     
     def __init__(
             self,
-            gedcom_file: str,
-            location_cache_file: str,
+            gedcom_file: Path,
+            location_cache_file: Path,
             default_country: Optional[str] = None,
             always_geocode: Optional[bool] = False,
-            use_alt_places: Optional[bool] = False
+            use_alt_places: Optional[bool] = False,
+            alt_place_file_path: Optional[Path] = None
     ):
         """
         Initialize GeolocatedGedcom.
@@ -488,10 +489,6 @@ class GeolocatedGedcom(Gedcom):
             use_alt_places (Optional[bool]): Whether to use alternative place names.
         """
         super().__init__(gedcom_file)
-        input_path = Path(gedcom_file).parent
-        base_file_name = Path(gedcom_file).stem
-        alt_place_file_path = input_path / f"{base_file_name}_cache.csv"
-        alt_place_file_path = alt_place_file_path.resolve() if use_alt_places else None
         self.geocoder = Geocode(
             cache_file=location_cache_file,
             default_country=default_country,

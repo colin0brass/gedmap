@@ -24,6 +24,7 @@ from summary import (
 
 # Constants
 GEO_CACHE_FILENAME = 'geo_cache.csv'
+ALT_PLACE_FILENAME_SUFFIX = '_alt.csv'
 
 def get_arg_parser() -> argparse.ArgumentParser:
     """
@@ -38,14 +39,14 @@ def get_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument('input_files', type=str, nargs='+',
         help='One or more GEDCOM files to process')
-    parser.add_argument('--default_country', type=str,
+    parser.add_argument('--default_country', type=str, default=None,
         help='Default country for geocoding, e.g. "England"')
     parser.add_argument('--always-geocode', action='store_true',
         help='Always geocode, ignore cache')
     parser.add_argument('--geo_cache_filename', type=str, default=GEO_CACHE_FILENAME,
         help='Geo-location cache filename to use')
     parser.add_argument('--use_alt_places', action='store_true',
-        help='Use alternative place names from file (<input_filename>_cache.csv)')
+        help=f'Use alternative place names from file (<input_filename>{ALT_PLACE_FILENAME_SUFFIX})')
     parser.add_argument('--write_places_summary', action='store_true',
         help='Save places summary as CSV')
     parser.add_argument('--write_people_summary', action='store_true',
@@ -90,13 +91,14 @@ def main() -> None:
 
         logger.info(f'Processing GEDCOM file: {gedcom_file}')
         geo_cache_path = input_path.parent / args.geo_cache_filename
-        geo_cache_path = geo_cache_path.resolve()
+        alt_place_file_path = input_path.parent / f"{base_file_name}{ALT_PLACE_FILENAME_SUFFIX}"
         my_gedcom = GeolocatedGedcom(
-            gedcom_file=str(gedcom_file),
-            location_cache_file=str(geo_cache_path),
+            gedcom_file=input_path.resolve(),
+            location_cache_file=geo_cache_path,
             default_country=args.default_country,
             always_geocode=args.always_geocode,
-            use_alt_places=args.use_alt_places
+            use_alt_places=args.use_alt_places,
+            alt_place_file_path=alt_place_file_path if args.use_alt_places else None
         )
 
         logger.info('Saving updated geo cache...')
