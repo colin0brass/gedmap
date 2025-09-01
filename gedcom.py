@@ -506,45 +506,11 @@ class GeolocatedGedcom(Gedcom):
         """
         self.geocoder.save_geo_cache()
 
-    def write_full_place_dict_csv(self, output_file: str) -> None:
-        """
-        Write self.full_place_dict to a CSV file for inspection.
-
-        Args:
-            output_file (str): Path to the output CSV file.
-        """
-        if not self.full_place_dict:
-            logger.warning("No places to write to CSV.")
-            return
-
-        # Collect all possible keys for CSV columns
-        fieldnames = set()
-        for data in self.full_place_dict.values():
-            fieldnames.update(data.keys())
-            # If 'location' is present, flatten its attributes
-            if 'location' in data and data['location']:
-                fieldnames.update(vars(data['location']).keys())
-        fieldnames = list(fieldnames)
-
-        with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            for place, data in self.full_place_dict.items():
-                row = data.copy()
-                # Flatten location attributes if present
-                if 'location' in data and data['location']:
-                    location_attrs = vars(data['location'])
-                    for k, v in location_attrs.items():
-                        row[k] = v
-                writer.writerow(row)
-        logger.info(f"Wrote full_place_dict to CSV: {output_file}")
-
     def _geolocate_all(self) -> None:
         """
         Geolocate all places in the GEDCOM file.
         """
         self.full_place_dict = self.gedcom_parser.get_full_place_dict()
-        self.write_full_place_dict_csv('full_place_dict_before_geocode.csv')
         cached_places, non_cached_places = self.geocoder.separate_cached_locations(self.full_place_dict)
         logger.info(f"Found {len(cached_places)} cached places, {len(non_cached_places)} non-cached places.")
         logger.info(f"Geolocating {len(cached_places)} cached places...")
