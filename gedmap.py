@@ -19,7 +19,8 @@ from kml import KML_Life_Lines
 from summary import (
     write_places_summary,
     write_people_summary,
-    write_birth_death_countries_summary
+    write_birth_death_countries_summary,
+    write_geocache_summary
 )
 
 # Constants
@@ -53,6 +54,8 @@ def get_arg_parser() -> argparse.ArgumentParser:
         help='Save people summary as CSV')
     parser.add_argument('--write_countries_summary', action='store_true',
         help='Save countries summary and heatmap')
+    parser.add_argument('--write_geocache_per_input_file', action='store_true',
+        help='Save geo-cache for each input file')
     parser.add_argument('--write_all', action='store_true',
         help='Save all summaries')
     parser.add_argument('--verbose', action='store_true',
@@ -127,6 +130,12 @@ def main() -> None:
             countries_summary_file = countries_summary_file.resolve()
             logger.info(f"Writing countries summary to {countries_summary_file}")
             write_birth_death_countries_summary(args, my_gedcom.people, str(countries_summary_file), base_file_name)
+
+        if args.write_geocache_per_input_file or args.write_all:
+            per_file_cache = output_folder / f"{base_file_name}_geo_cache.csv"
+            per_file_cache = per_file_cache.resolve()
+            logger.info(f"Writing geo cache to {per_file_cache}")
+            write_geocache_summary(my_gedcom.full_place_dict, str(per_file_cache))
 
 if __name__ == "__main__":
     try:

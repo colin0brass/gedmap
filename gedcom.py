@@ -381,7 +381,7 @@ class GedcomParser:
         """
         full_place_dict = {}
         try:
-            with GedcomReader(self.gedcom_file) as g:
+            with GedcomReader(str(self.gedcom_file)) as g:
                 # Individuals: collect PLAC under any event (BIRT/DEAT/BAPM/MARR/etc.)
                 for indi in g.records0("INDI"):
                     for ev in indi.sub_records:

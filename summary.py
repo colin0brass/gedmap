@@ -369,3 +369,37 @@ def write_birth_death_countries_summary(args: Namespace, people: Dict[str, Any],
     output_image_file = os.path.splitext(output_file)[0] + "_heatmap.png"
     save_birth_death_heatmap_matrix(birth_death_countries_summary, output_image_file, gedcom_file_name)
     logger.info(f"Saved heatmap matrix image to {output_image_file}")
+
+def write_geocache_summary(full_geolocation_dict: Dict[str, Any], output_file: str) -> None:
+    """
+    Write the geocoded location cache to a CSV file.
+
+    Args:
+        full_geolocation_dict (dict): Dictionary of geolocated places.
+        output_file (str): Output CSV file path.
+    """
+    try:
+        with open(output_file, 'w', newline='') as csvfile:
+            csv_header = [
+                'found_country', 'used', 'country_code', 'address', 'continent',
+                'alt_addr', 'country_name', 'latitude', 'longitude'
+            ]
+            csv_writer = csv.writer(csvfile, dialect='excel')
+            csv_writer.writerow(csv_header)
+            for place, data in full_geolocation_dict.items():
+                location = data.get('location', None)
+                found_country = getattr(location, 'found_country', '') if location else ''
+                used = getattr(location, 'used', False) if location else False
+                country_code = getattr(location, 'country_code', '') if location else ''
+                address = getattr(location, 'address', '') if location else ''
+                continent = getattr(location, 'continent', '') if location else ''
+                alt_addr = getattr(location, 'alt_addr', '') if location else ''
+                country_name = getattr(location, 'country_name', '') if location else ''
+                latitude = getattr(location.lat_lon, 'lat', '') if location and getattr(location, 'lat_lon', None) else ''
+                longitude = getattr(location.lat_lon, 'lon', '') if location and getattr(location, 'lat_lon', None) else ''
+                r = [
+                    found_country, data['count'], country_code, address, continent, alt_addr, country_name, latitude, longitude
+                ]
+                csv_writer.writerow(r)
+    except IOError as e:
+        logger.error(f"Failed to write places summary to {output_file}: {e}")
