@@ -12,14 +12,15 @@ import os
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from location import FuzzyAddressBook
 
 # Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
 
-def write_places_summary(args: Namespace, full_geolocation_dict: Dict[str, Any], output_file: str) -> None:
+def write_places_summary(args: Namespace, address_book: FuzzyAddressBook, output_file: str) -> None:
     """
     Write a summary of all geolocated places to a CSV file.
-    Each row contains: count, latitude, longitude, found_country, has_date,
+    Each row contains: count, latitude, longitude, found_country,
     place, country_name, continent.
 
     Args:
@@ -30,21 +31,20 @@ def write_places_summary(args: Namespace, full_geolocation_dict: Dict[str, Any],
     try:
         with open(output_file, 'w', newline='') as csvfile:
             csv_header = [
-                'count', 'latitude', 'longitude', 'found_country', 'has_date',
+                'count', 'latitude', 'longitude', 'found_country',
                 'place', 'country_name', 'continent'
             ]
             csv_writer = csv.writer(csvfile, dialect='excel')
             csv_writer.writerow(csv_header)
-            for place, data in full_geolocation_dict.items():
-                location = data.get('location', None)
+            for place, location in address_book.addresses().items():
+                # location = data.get('location', None)
                 latitude = getattr(location.lat_lon, 'lat', '') if location and getattr(location, 'lat_lon', None) else ''
                 longitude = getattr(location.lat_lon, 'lon', '') if location and getattr(location, 'lat_lon', None) else ''
                 found_country = getattr(location, 'found_country', '') if location else ''
-                has_date = data.get('has_date', False)
                 country_name = getattr(location, 'country_name', '') if location else ''
                 continent = getattr(location, 'continent', '') if location else ''
                 r = [
-                    data['count'], latitude, longitude, found_country, has_date,
+                    location.used, latitude, longitude, found_country,
                     place, country_name, continent
                 ]
                 csv_writer.writerow(r)
@@ -370,36 +370,37 @@ def write_birth_death_countries_summary(args: Namespace, people: Dict[str, Any],
     save_birth_death_heatmap_matrix(birth_death_countries_summary, output_image_file, gedcom_file_name)
     logger.info(f"Saved heatmap matrix image to {output_image_file}")
 
-def write_geocache_summary(full_geolocation_dict: Dict[str, Any], output_file: str) -> None:
+def write_geocache_summary(address_book: FuzzyAddressBook, output_file: str) -> None:
     """
     Write the geocoded location cache to a CSV file.
 
     Args:
-        full_geolocation_dict (dict): Dictionary of geolocated places.
+        address_book (FuzzyAddressBook): Address book containing geolocated places.
         output_file (str): Output CSV file path.
     """
+
+    # Prepare data for DataFrame
+    records = []
+    for place, location in address_book.addresses().items():
+        records.append({
+            'address': getattr(location, 'alt_addr', '') if location and getattr(location, 'alt_addr', '') else getattr(location, 'address', ''),
+            'country_name': getattr(location, 'country_name', '') if location else '',
+            'country_code': getattr(location, 'country_code', '') if location else '',
+            'continent': getattr(location, 'continent', '') if location else '',
+            'latitude': getattr(location.lat_lon, 'lat', '') if location and getattr(location, 'lat_lon', None) else '',
+            'longitude': getattr(location.lat_lon, 'lon', '') if location and getattr(location, 'lat_lon', None) else '',
+            'found_country': getattr(location, 'found_country', '') if location else '',
+        })
+
+    df = pd.DataFrame(records, columns=[
+        'address', 'country_name', 'country_code', 'continent',
+        'latitude', 'longitude', 'found_country'
+    ])
+
+    # Drop rows with duplicate 'address', keeping the first occurrence
+    df = df.drop_duplicates(subset=['address'], keep='first')
+
     try:
-        with open(output_file, 'w', newline='') as csvfile:
-            csv_header = [
-                'found_country', 'used', 'country_code', 'address', 'continent',
-                'alt_addr', 'country_name', 'latitude', 'longitude'
-            ]
-            csv_writer = csv.writer(csvfile, dialect='excel')
-            csv_writer.writerow(csv_header)
-            for place, data in full_geolocation_dict.items():
-                location = data.get('location', None)
-                found_country = getattr(location, 'found_country', '') if location else ''
-                used = getattr(location, 'used', False) if location else False
-                country_code = getattr(location, 'country_code', '') if location else ''
-                address = getattr(location, 'address', '') if location else ''
-                continent = getattr(location, 'continent', '') if location else ''
-                alt_addr = getattr(location, 'alt_addr', '') if location else ''
-                country_name = getattr(location, 'country_name', '') if location else ''
-                latitude = getattr(location.lat_lon, 'lat', '') if location and getattr(location, 'lat_lon', None) else ''
-                longitude = getattr(location.lat_lon, 'lon', '') if location and getattr(location, 'lat_lon', None) else ''
-                r = [
-                    found_country, data['count'], country_code, address, continent, alt_addr, country_name, latitude, longitude
-                ]
-                csv_writer.writerow(r)
+        df.to_csv(output_file, index=False)
     except IOError as e:
         logger.error(f"Failed to write places summary to {output_file}: {e}")

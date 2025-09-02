@@ -17,7 +17,7 @@ import pycountry_convert as pc
 import yaml  # Ensure PyYAML is installed
 from geopy.geocoders import Nominatim
 
-from location import LatLon, Location
+from location import LatLon, Location, FuzzyAddressBook
 from geocache import GeoCache
 
 # Re-use higher-level logger (inherits configuration from main script)
@@ -233,25 +233,25 @@ class Geocode:
                 location = self.geocode_place(less_precise_address, country_code, country_name, address_depth + 1)
 
         return location
-    
-    def separate_cached_locations(self, full_place_dict: Dict[str, dict]) -> Tuple[Dict[str, dict], Dict[str, dict]]:
+
+    def separate_cached_locations(self, address_book: FuzzyAddressBook) -> Tuple[FuzzyAddressBook, FuzzyAddressBook]:
         """
         Separate addresses into cached and non-cached.
 
         Args:
-            full_address_dict (Dict[str, dict]): Full address dictionary.
+            address_book (FuzzyAddressBook): Address book containing full addresses.
 
         Returns:
             Tuple[Dict[str, dict], Dict[str, dict]]: (cached_places, non_cached_places)
         """
-        cached_places = {}
-        non_cached_places = {}
-        for place, data in full_place_dict.items():
+        cached_places = FuzzyAddressBook()
+        non_cached_places = FuzzyAddressBook()
+        for place, data in address_book.addresses().items():
             place_lower = place.lower()
             if not self.always_geocode and (place_lower in self.geo_cache.geo_cache):
-                cached_places[place] = data
+                cached_places.fuzzy_add_address(place, data)
             else:
-                non_cached_places[place] = data
+                non_cached_places.fuzzy_add_address(place, data)
         return (cached_places, non_cached_places)
 
     def lookup_location(self, place: str) -> Optional[Location]:

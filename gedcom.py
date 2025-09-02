@@ -17,7 +17,7 @@ from ged4py.parser import GedcomReader
 from ged4py.model import Record, NameRec
 
 from geocode import Geocode
-from location import LatLon, Location
+from location import FuzzyAddressBook, LatLon, Location
 
 # Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
@@ -372,14 +372,14 @@ class GedcomParser:
             logger.error(f"Error parsing GEDCOM file '{self.gedcom_file}': {e}")
         return people
 
-    def get_full_place_dict(self) -> Dict[str, dict]:
+    def get_full_address_book(self) -> FuzzyAddressBook:
         """
-        Returns a dictionary of all places found in the GEDCOM file.
+        Returns address book of all places found in the GEDCOM file.
 
         Returns:
-            Dict[str, dict]: Dictionary of places.
+            FuzzyAddressBook: Address book of places.
         """
-        full_place_dict = {}
+        address_book = FuzzyAddressBook()
         try:
             with GedcomReader(str(self.gedcom_file)) as g:
                 # Individuals: collect PLAC under any event (BIRT/DEAT/BAPM/MARR/etc.)
@@ -388,8 +388,7 @@ class GedcomParser:
                         plac = ev.sub_tag_value("PLAC")
                         if plac:
                             place = plac.strip()
-                            if place not in full_place_dict:
-                                full_place_dict[place] = {'count': 1, 'place': place}
+                            address_book.fuzzy_add_address(place, None)
 
                 # Families: marriage/divorce places, etc.
                 for fam in g.records0("FAM"):
@@ -397,11 +396,10 @@ class GedcomParser:
                         plac = ev.sub_tag_value("PLAC")
                         if plac:
                             place = plac.strip()
-                            if place not in full_place_dict:
-                                full_place_dict[place] = {'count': 1, 'place': place}
+                            address_book.fuzzy_add_address(place, None)
         except Exception as e:
             logger.error(f"Error extracting places from GEDCOM file '{self.gedcom_file}': {e}")
-        return full_place_dict
+        return address_book
 
 class Gedcom:
     """
@@ -410,12 +408,12 @@ class Gedcom:
     Attributes:
         gedcom_parser (GedcomParser): GEDCOM parser instance.
         people (Dict[str, Person]): Dictionary of Person objects.
-        full_place_dict (Dict[str, dict]): Dictionary of places.
+        address_book (FuzzyAddressBook): Address book of places.
     """
     __slots__ = [
         'gedcom_parser',
         'people',
-        'full_place_dict'
+        'address_book',
     ]
     def __init__(self, gedcom_file: Path):
         """
@@ -428,7 +426,7 @@ class Gedcom:
             gedcom_file=gedcom_file
         )
         self.people: Dict[str, Person] = {}
-        self.full_place_dict: Dict[str, dict] = {}
+        self.address_book: FuzzyAddressBook = FuzzyAddressBook()
 
     def close(self):
         """Close the GEDCOM parser."""
@@ -444,15 +442,15 @@ class Gedcom:
         self.people = self.gedcom_parser.parse_people()
         return self.people
 
-    def get_full_place_dict(self) -> Dict[str, dict]:
+    def get_full_address_book(self) -> FuzzyAddressBook:
         """
         Get all places from the GEDCOM file.
 
         Returns:
-            Dict[str, dict]: Dictionary of places.
+            FuzzyAddressBook: Address book of places.
         """
-        self.full_place_dict = self.gedcom_parser.get_full_place_dict()
-        return self.full_place_dict
+        self.address_book = self.gedcom_parser.get_full_address_book()
+        return self.address_book
 
 class GeolocatedGedcom(Gedcom):
     """
@@ -460,11 +458,11 @@ class GeolocatedGedcom(Gedcom):
 
     Attributes:
         geocoder (Geocode): Geocode instance.
-        full_place_dict (Dict[str, dict]): Dictionary of places.
+        address_book (FuzzyAddressBook): Address book of places.
     """
     __slots__ = [
         'geocoder',
-        'full_place_dict',
+        'address_book',
         'alt_place_file_path'
     ]
     geolocate_all_logger_interval = 20
@@ -495,7 +493,7 @@ class GeolocatedGedcom(Gedcom):
             always_geocode=always_geocode,
             alt_place_file_path=alt_place_file_path if use_alt_places else None
         )
-        self.full_place_dict: Dict[str, dict] = {}
+        # self.address_book: FuzzyAddressBook = FuzzyAddressBook()
 
         self._geolocate_all()
         self._parse_people()
@@ -510,23 +508,25 @@ class GeolocatedGedcom(Gedcom):
         """
         Geolocate all places in the GEDCOM file.
         """
-        self.full_place_dict = self.gedcom_parser.get_full_place_dict()
-        cached_places, non_cached_places = self.geocoder.separate_cached_locations(self.full_place_dict)
-        logger.info(f"Found {len(cached_places)} cached places, {len(non_cached_places)} non-cached places.")
-        logger.info(f"Geolocating {len(cached_places)} cached places...")
-        for place, data in cached_places.items():
-            location = self.geocoder.lookup_location(place)
-            self.full_place_dict[place]['location'] = location
-        num_non_cached_places = len(non_cached_places)
+        self.address_book = self.gedcom_parser.get_full_address_book()
+        cached_places, non_cached_places = self.geocoder.separate_cached_locations(self.address_book)
+        logger.info(f"Found {cached_places.len()} cached places, {non_cached_places.len()} non-cached places.")
+        logger.info(f"Geolocating {cached_places.len()} cached places...")
+        for place, data in cached_places.addresses().items():
+            use_place = data.alt_addr if data.alt_addr else place
+            location = self.geocoder.lookup_location(use_place)
+            self.address_book.fuzzy_add_address(place, location)
+        num_non_cached_places = non_cached_places.len()
         logger.info(f"Geolocating {num_non_cached_places} non-cached places...")
-        for place in non_cached_places:
+        for place in non_cached_places.addresses().keys():
             logger.info(f"- {place}...")
-        for idx, (place, data) in enumerate(non_cached_places.items(), 1):
-            location = self.geocoder.lookup_location(place)
-            self.full_place_dict[place]['location'] = location
+        for idx, (place, data) in enumerate(non_cached_places.addresses().items(), 1):
+            use_place = data.alt_addr if data.alt_addr else place
+            location = self.geocoder.lookup_location(use_place)
+            self.address_book.fuzzy_add_address(place, location)
             if idx % self.geolocate_all_logger_interval == 0 or idx == num_non_cached_places:
                 logger.info(f"Geolocated {idx} of {num_non_cached_places} non-cached places...")
-        logger.info(f"Geolocation of all {len(self.full_place_dict)} places completed.")
+        logger.info(f"Geolocation of all {self.address_book.len()} places completed.")
 
     def _parse_people(self) -> None:
         """

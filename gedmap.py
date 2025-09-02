@@ -25,7 +25,8 @@ from summary import (
 
 # Constants
 GEO_CACHE_FILENAME = 'geo_cache.csv'
-ALT_PLACE_FILENAME_SUFFIX = '_alt.csv'
+FILE_ALT_PLACE_FILENAME_SUFFIX = '_alt.csv'
+FILE_GEOCACHE_FILENAME_SUFFIX = '_cache.csv'
 
 def get_arg_parser() -> argparse.ArgumentParser:
     """
@@ -47,7 +48,9 @@ def get_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument('--geo_cache_filename', type=str, default=GEO_CACHE_FILENAME,
         help='Geo-location cache filename to use')
     parser.add_argument('--use_alt_places', action='store_true',
-        help=f'Use alternative place names from file (<input_filename>{ALT_PLACE_FILENAME_SUFFIX})')
+        help=f'Use alternative place names from file (<input_filename>{FILE_ALT_PLACE_FILENAME_SUFFIX})')
+    parser.add_argument('--use_file_geocache', action='store_true',
+        help=f'Use geo-cache from file (<input_filename>{FILE_GEOCACHE_FILENAME_SUFFIX})')
     parser.add_argument('--write_places_summary', action='store_true',
         help='Save places summary as CSV')
     parser.add_argument('--write_people_summary', action='store_true',
@@ -92,9 +95,21 @@ def main() -> None:
             input_path = (Path.cwd() / input_path).resolve()
         base_file_name = input_path.stem
 
+        # TO DO - load alternate address file, and apply to place list
+        # TO DO - load global geo cache if applicable
+        # TO DO - load per file geo cache if applicable
+        # TO DO - apply geo cache to place list, by alternate address if it exists, or normal addr
+        # TO DO - geolocate any remaining places that don't already have lat/lon
+        # TO DO - consider flagging locations that were manually vs automatically geocoded
+
+        # other thoughts
+        # copilot suggested fuzzy address matching; how would it have done that?
+        # is there something there that could improve this flow?
+        # ok, copilot says there is "rapidfuzz", to use fuzzy string matching for address resolution
+
         logger.info(f'Processing GEDCOM file: {gedcom_file}')
         geo_cache_path = input_path.parent / args.geo_cache_filename
-        alt_place_file_path = input_path.parent / f"{base_file_name}{ALT_PLACE_FILENAME_SUFFIX}"
+        alt_place_file_path = input_path.parent / f"{base_file_name}{FILE_ALT_PLACE_FILENAME_SUFFIX}"
         my_gedcom = GeolocatedGedcom(
             gedcom_file=input_path.resolve(),
             location_cache_file=geo_cache_path,
@@ -117,7 +132,7 @@ def main() -> None:
             places_summary_file = output_folder / f"{base_file_name}_places.csv"
             places_summary_file = places_summary_file.resolve()
             logger.info(f"Writing places summary to {places_summary_file}")
-            write_places_summary(args, my_gedcom.full_place_dict, str(places_summary_file))
+            write_places_summary(args, my_gedcom.address_book, str(places_summary_file))
 
         if args.write_people_summary or args.write_all:
             people_summary_file = output_folder / f"{base_file_name}_people.csv"
@@ -135,7 +150,7 @@ def main() -> None:
             per_file_cache = output_folder / f"{base_file_name}_geo_cache.csv"
             per_file_cache = per_file_cache.resolve()
             logger.info(f"Writing geo cache to {per_file_cache}")
-            write_geocache_summary(my_gedcom.full_place_dict, str(per_file_cache))
+            write_geocache_summary(my_gedcom.address_book, str(per_file_cache))
 
 if __name__ == "__main__":
     try:
