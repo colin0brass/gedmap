@@ -249,9 +249,9 @@ class Geocode:
         for place, data in address_book.addresses().items():
             place_lower = place.lower()
             if not self.always_geocode and (place_lower in self.geo_cache.geo_cache):
-                cached_places.fuzzy_add_address(place, data)
+                cached_places.add_address(place, data)
             else:
-                non_cached_places.fuzzy_add_address(place, data)
+                non_cached_places.add_address(place, data)
         return (cached_places, non_cached_places)
 
     def lookup_location(self, place: str) -> Optional[Location]:

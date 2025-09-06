@@ -404,3 +404,28 @@ def write_geocache_summary(address_book: FuzzyAddressBook, output_file: str) -> 
         df.to_csv(output_file, index=False)
     except IOError as e:
         logger.error(f"Failed to write places summary to {output_file}: {e}")
+
+def write_alt_places_summary(args: Namespace, address_book: FuzzyAddressBook, output_file: str) -> None:
+    """
+    Write a summary of all alternative place names to a CSV file.
+    Each row contains: alt_addr, list of associated addresses.
+
+    Args:
+        args (Namespace): Parsed CLI arguments.
+        address_book (FuzzyAddressBook): Address book containing geolocated places.
+        output_file (str): Output CSV file path.
+    """
+    records = list()
+    for alt_addr in address_book.get_alt_addr_list():
+        associated_addresses = address_book.get_address_list_for_alt_addr(alt_addr)
+
+        for address in associated_addresses:
+            location = address_book.get_address(address)
+            canonical_addr = getattr(location, 'canonical_addr', None) if location else None
+            records.append((alt_addr, len(associated_addresses), address, canonical_addr if canonical_addr else ''))
+
+    df = pd.DataFrame(records, columns=['alt_addr', 'count', 'associated_address', 'canonical_address'])
+    try:
+        df.to_csv(output_file, index=False)
+    except IOError as e:
+        logger.error(f"Failed to write alternative places summary to {output_file}: {e}")

@@ -20,7 +20,8 @@ from summary import (
     write_places_summary,
     write_people_summary,
     write_birth_death_countries_summary,
-    write_geocache_summary
+    write_geocache_summary,
+    write_alt_places_summary
 )
 
 # Constants
@@ -59,6 +60,8 @@ def get_arg_parser() -> argparse.ArgumentParser:
         help='Save countries summary and heatmap')
     parser.add_argument('--write_geocache_per_input_file', action='store_true',
         help='Save geo-cache for each input file')
+    parser.add_argument('--write_alt_place_summary', action='store_true',
+        help='Save alternative place names summary as CSV')
     parser.add_argument('--write_all', action='store_true',
         help='Save all summaries')
     parser.add_argument('--verbose', action='store_true',
@@ -106,6 +109,7 @@ def main() -> None:
         # copilot suggested fuzzy address matching; how would it have done that?
         # is there something there that could improve this flow?
         # ok, copilot says there is "rapidfuzz", to use fuzzy string matching for address resolution
+        # consider also an ML enhanced address resolution such as https://github.com/openvenues/libpostal
 
         logger.info(f'Processing GEDCOM file: {gedcom_file}')
         geo_cache_path = input_path.parent / args.geo_cache_filename
@@ -151,6 +155,12 @@ def main() -> None:
             per_file_cache = per_file_cache.resolve()
             logger.info(f"Writing geo cache to {per_file_cache}")
             write_geocache_summary(my_gedcom.address_book, str(per_file_cache))
+
+        if args.use_alt_places and (args.write_alt_place_summary or args.write_all):
+            alt_places_summary_file = output_folder / f"{base_file_name}_alt_places.csv"
+            alt_places_summary_file = alt_places_summary_file.resolve()
+            logger.info(f"Writing alternative places summary to {alt_places_summary_file}")
+            write_alt_places_summary(args, my_gedcom.address_book, str(alt_places_summary_file))
 
 if __name__ == "__main__":
     try:
