@@ -7,112 +7,146 @@ Loads fallback continent mappings from geocode.yaml.
 
 import os
 import csv
+import re
 import time
 import logging
 from pathlib import Path
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple, Dict, List
+
+from unidecode import unidecode
+import yaml
 
 import pycountry
 import pycountry_convert as pc
 import yaml  # Ensure PyYAML is installed
 from geopy.geocoders import Nominatim
 
-from location import LatLon, Location, FuzzyAddressBook
+from postal.expand import expand_address
+from postal.parser import parse_address
+
+from location import LatLon, Location
+from addressbook import FuzzyAddressBook
 from geocache import GeoCache
 
 # Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
 
-def load_yaml_config(path: Path) -> dict:
-    """
-    Load YAML configuration from the given path.
 
-    Args:
-        path (Path): Path to the YAML file.
+class Canonical:
 
-    Returns:
-        dict: Parsed YAML configuration or empty dict if not found/error.
-    """
-    try:
-        with open(path, "r") as f:
-            return yaml.safe_load(f)
-    except FileNotFoundError as e:
-        logger.warning(f"Could not load geocode.yaml: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error loading geocode.yaml: {e}")
-    return {}
+    SPACE_RE = re.compile(r"\s+")
+    PUNC_RE = re.compile(r"[\,;]+")
 
-class Geocode:
-    """
-    Handles geocoding and country/continent lookup for places.
-
-    Attributes:
-        always_geocode (bool): Ignore cache if True.
-        location_cache_file (str): Path to cache file.
-        default_country (str): Default country for geocoding.
-        geo_cache (Dict[str, dict]): Cached addresses.
-        geolocator (Nominatim): Geopy geocoder instance.
-        fallback_continent_map (Dict[str, str]): Fallback continent mapping from YAML.
-        ... (other config attributes)
-    """
-    __slots__ = [
-        'always_geocode', 'location_cache_file', 'additional_countries_codes_dict_to_add',
-        'additional_countries_to_add', 'country_substitutions', 'default_country', 'geo_cache',
-        'geolocator', 'countrynames', 'countrynames_lower', 'country_name_to_code_dict',
-        'country_code_to_name_dict', 'country_code_to_continent_dict', 'fallback_continent_map'
-    ]
-    geocode_sleep_interval = 1  # Delay due to Nominatim request limit
-
-    def __init__(
-        self,
-        cache_file: str,
-        default_country: Optional[str] = None,
-        always_geocode: bool = False,
-        alt_place_file_path: Optional[Path] = None
-    ):
+    
+    def __init__(self, geo_config_path: Optional[Path] = None):
         """
-        Initialize the Geocode object, loading country info and cache.
+        Initialize Canonical with country data from pycountry and optional config file.
 
         Args:
-            cache_file (str): Path to cache file.
-            default_country (Optional[str]): Default country.
-            always_geocode (bool): Ignore cache if True.
-            alt_place_cache (Dict[str, dict]): Alternative place names cache.
-            use_alt_places (bool): Whether to use alternative place names.
-            alt_place_file_path (Optional[Path]): Alternative place names file path.
+            geo_config_path (Optional[Path]): Path to geocode.yaml configuration file.
         """
-        self.always_geocode = always_geocode
-        self.location_cache_file = cache_file
+        self.countrynames = []
+        self.countrynames_lower = []
+        self.country_name_to_code_dict = {}
+        self.country_code_to_continent_dict = {}
+        self.country_code_to_name_dict = {}
+        self.country_code_to_continent_dict = {}
+        self.country_substitutions = {}
+        self.default_country = None
+        self.fallback_continent_map = {}
 
-        geo_yaml_path = Path(__file__).parent / "geocode.yaml"
-        geo_config = load_yaml_config(geo_yaml_path)
+        self.__geo_config = {}
 
-        self.additional_countries_codes_dict_to_add = geo_config.get('additional_countries_codes_dict_to_add', {})
-        self.additional_countries_to_add = list(self.additional_countries_codes_dict_to_add.keys())
-        self.country_substitutions = geo_config.get('country_substitutions', {})
-        self.default_country = default_country or geo_config.get('default_country', 'England')
+        if geo_config_path:
+            self.load_geo_config(geo_config_path)
 
-        # Load fallback continent map from YAML if present, else use empty dict
-        self.fallback_continent_map: Dict[str, str] = geo_config.get('fallback_continent_map', {})
+    def load_geo_config(self, geo_config_path: Optional[Path]) -> None:
+        if geo_config_path and geo_config_path.exists():
+            try:
+                with open(geo_config_path, 'r', encoding='utf-8') as f:
+                    self.__geo_config = yaml.safe_load(f) or {}
+            except Exception as e:
+                logger.error(f"Failed to load geo config from {geo_config_path}: {e}")
+                self.__geo_config = {}
+        else:
+            self.__geo_config = {}
 
-        self.geo_cache = GeoCache(cache_file, always_geocode, alt_place_file_path)
-        self.geolocator = Nominatim(user_agent="gedcom_geocoder")
+        self.country_substitutions = self.__geo_config.get('country_substitutions', {})
+        self.default_country = self.__geo_config.get('default_country', '')
+        additional_countries_codes_dict_to_add = self.__geo_config.get('additional_countries_codes_dict_to_add', {})
+        self.fallback_continent_map = self.__geo_config.get('fallback_continent_map', {})
 
+        additional_countries_to_add = list(additional_countries_codes_dict_to_add.keys())
         self.countrynames = [country.name for country in pycountry.countries]
-        self.countrynames.extend(self.additional_countries_to_add)
-        self.countrynames_lower = set(name.lower() for name in self.countrynames)
+        self.countrynames.extend(additional_countries_to_add)
+
+        self.countrynames_lower = [name.lower() for name in self.countrynames]
 
         self.country_name_to_code_dict = {country.name: country.alpha_2 for country in pycountry.countries}
-        self.country_name_to_code_dict.update(self.additional_countries_codes_dict_to_add)
-        self.country_code_to_name_dict = {v.upper(): k for k, v in self.country_name_to_code_dict.items()}
-        self.country_code_to_continent_dict = {code: self.country_code_to_continent(code) for code in self.country_code_to_name_dict.keys()}
+        self.country_name_to_code_dict.update(additional_countries_codes_dict_to_add)
 
-    def save_geo_cache(self) -> None:
-        """
-        Save address cache if applicable.
-        """
-        if self.geo_cache.location_cache_file:
-            self.geo_cache.save_geo_cache()
+        self.country_code_to_name_dict = {v: k for k, v in self.country_name_to_code_dict.items()}
+        self.country_code_to_continent_dict = {code: self.country_code_to_name_dict.get(code) for code in self.country_code_to_name_dict.keys()}
+
+
+    def __strip_and_norm(self, address: str) -> str:
+        if not address: return ""
+        address = unidecode(address)
+        address = address.strip()
+        address = self.PUNC_RE.sub(",", address)
+        address = self.SPACE_RE.sub(" ", address)
+        return address
+
+    def __expand_variants(self, address: str, max_variants=8) -> List[str]:
+        variants = list(expand_address(address))[:max_variants]
+        return variants if variants else [address]
+    
+    def __parse_address(self, address: str) -> List[tuple]:
+        parsed = dict(parse_address(address))
+        return {k: self.__strip_and_norm(v) for v, k in parsed.items()}
+    
+    def __canonical_city(self, city: str) -> str:
+        """ Returns the longest variant of the city name after stripping and normalizing. """
+        # placeholder for potential future improved lookup and matching
+        city_clean = self.__strip_and_norm(city)
+        city_variants = self.__expand_variants(city_clean)
+        best_variant = max(city_variants, key=len)
+        return best_variant
+    
+    def __canonical_country(self, country: str) -> str:
+        """ Returns the longest variant of the country name after stripping and normalizing. """
+        # placeholder for potential future improved lookup and matching
+        country_clean = self.__strip_and_norm(country)
+        country_variants = self.__expand_variants(country_clean)
+        best_variant = max(country_variants, key=len)
+        return best_variant
+    
+    def __canonicalise_parts(self, parts: Dict[str, str]) -> (Dict):
+        ordered_keys = ['house_number', 'road', 'suburb', 'city', 'state', 'postcode', 'country']
+        canonical_parts = {key: parts.get(key, '') for key in ordered_keys if parts.get(key)}
+        canonical_parts['city'] = self.__canonical_city(canonical_parts.get('city', ''))
+        canonical_parts['country'] = self.__canonical_country(canonical_parts.get('country', ''))
+        segments = list(canonical_parts.values())
+        # Remove duplicates while preserving order
+        segments = [s for i,s in enumerate(segments) if s and s not in segments[:i]]
+        canonical_address = ', '.join(segments)
+        return canonical_parts, canonical_address
+
+    def get_canonical(self, address: str) -> Tuple[str, Dict[str, str]]:
+        address_clean = self.__strip_and_norm(address)
+        address_variants = self.__expand_variants(address_clean)
+        best_variant_canonical = None
+        best_len = -1 # initial value
+        for variant in address_variants:
+            address_parts = self.__parse_address(variant)
+            address_parts, address_canonical = self.__canonicalise_parts(address_parts)
+            # prefer the variant with city and country, and the longest overall length
+            if 'city' in address_parts and 'country' in address_parts:
+                if len(address_canonical) > best_len:
+                    best_variant_canonical = address_canonical
+                    best_len = len(address_canonical)
+
+        return best_variant_canonical, address_parts
 
     def country_code_to_continent(self, country_code: str) -> Optional[str]:
         """
@@ -176,6 +210,61 @@ class Geocode:
 
         country_code = self.country_name_to_code_dict.get(country_name, 'none')
         return (place_lower, country_code, country_name, found)
+    
+class Geocode:
+    """
+    Handles geocoding and country/continent lookup for places.
+
+    Attributes:
+        always_geocode (bool): Ignore cache if True.
+        location_cache_file (str): Path to cache file.
+        geo_cache (Dict[str, dict]): Cached addresses.
+        geolocator (Nominatim): Geopy geocoder instance.
+        fallback_continent_map (Dict[str, str]): Fallback continent mapping from YAML.
+        ... (other config attributes)
+    """
+    __slots__ = [
+        'default_country', 'always_geocode', 'location_cache_file', 'additional_countries_codes_dict_to_add',
+        'additional_countries_to_add', 'country_substitutions', 'geo_cache',
+        'geolocator', 'canonical', 'countrynames', 'countrynames_lower', 'country_name_to_code_dict',
+        'country_code_to_name_dict', 'country_code_to_continent_dict', 'fallback_continent_map'
+    ]
+    geocode_sleep_interval = 1  # Delay due to Nominatim request limit
+
+    def __init__(
+        self,
+        cache_file: str,
+        default_country: Optional[str] = None,
+        always_geocode: bool = False,
+        alt_place_file_path: Optional[Path] = None,
+        geo_config_path: Optional[Path] = None
+    ):
+        """
+        Initialize the Geocode object, loading country info and cache.
+
+        Args:
+            cache_file (str): Path to cache file.
+            always_geocode (bool): Ignore cache if True.
+            alt_place_cache (Dict[str, dict]): Alternative place names cache.
+            use_alt_places (bool): Whether to use alternative place names.
+            alt_place_file_path (Optional[Path]): Alternative place names file path.
+            geo_config_path (Optional[Path]): Path to geocode.yaml configuration file.
+        """
+        self.default_country = default_country
+        self.always_geocode = always_geocode
+        self.location_cache_file = cache_file
+
+        self.geo_cache = GeoCache(cache_file, always_geocode, alt_place_file_path)
+        self.geolocator = Nominatim(user_agent="gedcom_geocoder")
+
+        self.canonical = Canonical(geo_config_path)
+
+    def save_geo_cache(self) -> None:
+        """
+        Save address cache if applicable.
+        """
+        if self.geo_cache.location_cache_file:
+            self.geo_cache.save_geo_cache()
 
     def geocode_place(self, place: str, country_code: str, country_name: str, found_country: bool = False, address_depth: int = 0) -> Optional[Location]:
         """
@@ -276,24 +365,28 @@ class Geocode:
         if not self.always_geocode:
             use_place_name, cache_entry = self.geo_cache.lookup_geo_cache_entry(place)
 
-        (place_with_country, country_code, country_name, found_country) = self.get_place_and_countrycode(use_place_name)
+        default_country = self.canonical.default_country if self.canonical.default_country else ''
 
+        (place_with_country, country_code, country_name, found_country) = self.canonical.get_place_and_countrycode(use_place_name)
+        canonical, parts = self.canonical.get_canonical(use_place_name)
         if cache_entry and not self.always_geocode:
             if cache_entry.get('latitude') and cache_entry.get('longitude'):
                 found_in_cache = True
                 location = Location.from_dict(cache_entry)
+                location.canonical_addr = canonical
+                location.canonical_parts = parts
                 if cache_entry.get('found_country', False) == False or cache_entry.get('country_name', '') == '':
                     if found_country:
                         logger.info(f"Found country in cache for {use_place_name}, but it was not marked as found.")
                         location.found_country = True
                         location.country_code = country_code.upper()
                         location.country_name = country_name
-                        location.continent = self.country_code_to_continent_dict.get(country_code, "Unknown")
+                        location.continent = self.canonical.country_code_to_continent_dict.get(country_code, "Unknown")
                         self.geo_cache.add_geo_cache_entry(place, location)
                     else:
                         logger.info(f"Unable to add country from geo cache lookup for {use_place_name}")
                 if not found_country:
-                    logger.info(f"Country not found in cache for {use_place_name}, using default country: {self.default_country}")
+                    logger.info(f"Country not found in cache for {use_place_name}, using default country: {default_country}")
 
         if not found_in_cache:
             location = self.geocode_place(place_with_country, country_code, country_name, found_country, address_depth=0)
@@ -305,6 +398,6 @@ class Geocode:
         if location:
             continent = location.continent
             if not continent or continent.strip().lower() in ('', 'none'):
-                location.continent = self.country_code_to_continent_dict.get(location.country_code, "Unknown")
+                location.continent = self.canonical.country_code_to_continent_dict.get(location.country_code, "Unknown")
 
         return location

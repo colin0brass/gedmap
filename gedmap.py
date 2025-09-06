@@ -28,6 +28,7 @@ from summary import (
 GEO_CACHE_FILENAME = 'geo_cache.csv'
 FILE_ALT_PLACE_FILENAME_SUFFIX = '_alt.csv'
 FILE_GEOCACHE_FILENAME_SUFFIX = '_cache.csv'
+GEO_CONFIG_FILENAME = 'geo_config.yaml'
 
 def get_arg_parser() -> argparse.ArgumentParser:
     """
@@ -88,6 +89,9 @@ def main() -> None:
     )
     logger = logging.getLogger(__name__)
 
+    script_dir = Path(__file__).parent.resolve()
+    geo_config_path = script_dir / GEO_CONFIG_FILENAME
+        
     output_folder = Path(args.output_folder).resolve()
     output_folder.mkdir(parents=True, exist_ok=True)
 
@@ -120,7 +124,8 @@ def main() -> None:
             default_country=args.default_country,
             always_geocode=args.always_geocode,
             use_alt_places=args.use_alt_places,
-            alt_place_file_path=alt_place_file_path if args.use_alt_places else None
+            alt_place_file_path=alt_place_file_path if args.use_alt_places else None,
+            geo_config_path=geo_config_path if geo_config_path.exists() else None,
         )
 
         logger.info('Saving updated geo cache...')

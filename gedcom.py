@@ -17,7 +17,8 @@ from ged4py.parser import GedcomReader
 from ged4py.model import Record, NameRec
 
 from geocode import Geocode
-from location import FuzzyAddressBook, LatLon, Location
+from location import LatLon, Location
+from addressbook import FuzzyAddressBook
 
 # Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
@@ -372,14 +373,14 @@ class GedcomParser:
             logger.error(f"Error parsing GEDCOM file '{self.gedcom_file}': {e}")
         return people
 
-    def get_full_address_book(self) -> FuzzyAddressBook:
+    def get_full_address_list(self) -> List[str]:
         """
-        Returns address book of all places found in the GEDCOM file.
+        Returns a list of all unique places found in the GEDCOM file.
 
         Returns:
-            FuzzyAddressBook: Address book of places.
+            List[str]: List of unique place names.
         """
-        address_book = FuzzyAddressBook()
+        address_list = []
         try:
             with GedcomReader(str(self.gedcom_file)) as g:
                 # Individuals: collect PLAC under any event (BIRT/DEAT/BAPM/MARR/etc.)
@@ -388,7 +389,16 @@ class GedcomParser:
                         plac = ev.sub_tag_value("PLAC")
                         if plac:
                             place = plac.strip()
-                            address_book.add_address(place, None)
+                            address_list.append(place)
+
+            with GedcomReader(str(self.gedcom_file)) as g:
+                # Individuals: collect PLAC under any event (BIRT/DEAT/BAPM/MARR/etc.)
+                for indi in g.records0("INDI"):
+                    for ev in indi.sub_records:
+                        plac = ev.sub_tag_value("PLAC")
+                        if plac:
+                            place = plac.strip()
+                            address_list.append(place)
 
                 # Families: marriage/divorce places, etc.
                 for fam in g.records0("FAM"):
@@ -396,10 +406,10 @@ class GedcomParser:
                         plac = ev.sub_tag_value("PLAC")
                         if plac:
                             place = plac.strip()
-                            address_book.add_address(place, None)
+                            address_list.append(place)
         except Exception as e:
             logger.error(f"Error extracting places from GEDCOM file '{self.gedcom_file}': {e}")
-        return address_book
+        return address_list
 
 class Gedcom:
     """
@@ -408,12 +418,12 @@ class Gedcom:
     Attributes:
         gedcom_parser (GedcomParser): GEDCOM parser instance.
         people (Dict[str, Person]): Dictionary of Person objects.
-        address_book (FuzzyAddressBook): Address book of places.
+        address_list (List[str]): List of unique place names.
     """
     __slots__ = [
         'gedcom_parser',
         'people',
-        'address_book',
+        'address_list'
     ]
     def __init__(self, gedcom_file: Path):
         """
@@ -426,13 +436,12 @@ class Gedcom:
             gedcom_file=gedcom_file
         )
         self.people: Dict[str, Person] = {}
-        self.address_book: FuzzyAddressBook = FuzzyAddressBook()
 
     def close(self):
         """Close the GEDCOM parser."""
         self.gedcom_parser.close()
 
-    def _parse_people(self) -> Dict[str, Person]:
+    def parse_people(self) -> Dict[str, Person]:
         """
         Parse people from the GEDCOM file.
 
@@ -442,15 +451,14 @@ class Gedcom:
         self.people = self.gedcom_parser.parse_people()
         return self.people
 
-    def get_full_address_book(self) -> FuzzyAddressBook:
+    def read_full_address_list(self) -> None:
         """
         Get all places from the GEDCOM file.
 
         Returns:
-            FuzzyAddressBook: Address book of places.
+            List[str]: List of unique place names.
         """
-        self.address_book = self.gedcom_parser.get_full_address_book()
-        return self.address_book
+        self.address_list = self.gedcom_parser.get_full_address_list()
 
 class GeolocatedGedcom(Gedcom):
     """
@@ -463,7 +471,8 @@ class GeolocatedGedcom(Gedcom):
     __slots__ = [
         'geocoder',
         'address_book',
-        'alt_place_file_path'
+        'alt_place_file_path',
+        'geo_config_path'
     ]
     geolocate_all_logger_interval = 20
     
@@ -474,7 +483,8 @@ class GeolocatedGedcom(Gedcom):
             default_country: Optional[str] = None,
             always_geocode: Optional[bool] = False,
             use_alt_places: Optional[bool] = False,
-            alt_place_file_path: Optional[Path] = None
+            alt_place_file_path: Optional[Path] = None,
+            geo_config_path: Optional[Path] = None
     ):
         """
         Initialize GeolocatedGedcom.
@@ -487,15 +497,20 @@ class GeolocatedGedcom(Gedcom):
             use_alt_places (Optional[bool]): Whether to use alternative place names.
         """
         super().__init__(gedcom_file)
+
+        self.address_book = FuzzyAddressBook()
+
         self.geocoder = Geocode(
             cache_file=location_cache_file,
             default_country=default_country,
             always_geocode=always_geocode,
-            alt_place_file_path=alt_place_file_path if use_alt_places else None
+            alt_place_file_path=alt_place_file_path if use_alt_places else None,
+            geo_config_path=geo_config_path if geo_config_path else None
         )
 
-        self._geolocate_all()
-        self._parse_people()
+        self.read_full_address_book()
+        self.geolocate_all()
+        self.parse_people()
 
     def save_location_cache(self) -> None:
         """
@@ -503,11 +518,10 @@ class GeolocatedGedcom(Gedcom):
         """
         self.geocoder.save_geo_cache()
 
-    def _geolocate_all(self) -> None:
+    def geolocate_all(self) -> None:
         """
         Geolocate all places in the GEDCOM file.
         """
-        self.address_book = self.gedcom_parser.get_full_address_book()
         cached_places, non_cached_places = self.geocoder.separate_cached_locations(self.address_book)
         logger.info(f"Found {cached_places.len()} cached places, {non_cached_places.len()} non-cached places.")
 
@@ -530,39 +544,50 @@ class GeolocatedGedcom(Gedcom):
                 
         logger.info(f"Geolocation of all {self.address_book.len()} places completed.")
 
-    def _parse_people(self) -> None:
+    def parse_people(self) -> None:
         """
         Parse and geolocate all people in the GEDCOM file.
         """
-        super()._parse_people()
-        self._geolocate_people()
+        super().parse_people()
+        self.geolocate_people()
 
-    def _geolocate_people(self) -> None:
+    def read_full_address_book(self) -> None:
+        """
+        Get all places from the GEDCOM file.
+        """
+        super().read_full_address_list()
+        for place in self.address_list:
+            if not self.address_book.get_address(place):
+                # location = self.geocoder.lookup_location(place)
+                location = None
+                self.address_book.add_address(place, location)
+
+    def geolocate_people(self) -> None:
         """
         Geolocate birth, marriage, and death events for all people.
         """
         for person in self.people.values():
             found_location = False
             if person.birth:
-                event = self._geolocate_event(person.birth)
+                event = self.__geolocate_event(person.birth)
                 person.birth.location = event.location
                 if not found_location and event.location and event.location.lat_lon and event.location.lat_lon.is_valid():
                     person.lat_lon = event.location.lat_lon
                     found_location = True
             for marriage_event in person.marriages:
-                event = self._geolocate_event(marriage_event)
+                event = self.__geolocate_event(marriage_event)
                 marriage_event.location = event.location
                 if not found_location and event.location and event.location.lat_lon and event.location.lat_lon.is_valid():
                     person.lat_lon = event.location.lat_lon
                     found_location = True
             if person.death:
-                event = self._geolocate_event(person.death)
+                event = self.__geolocate_event(person.death)
                 person.death.location = event.location
                 if not found_location and event.location and event.location.lat_lon and event.location.lat_lon.is_valid():
                     person.lat_lon = event.location.lat_lon
                     found_location = True
 
-    def _geolocate_event(self, event: LifeEvent) -> LifeEvent:
+    def __geolocate_event(self, event: LifeEvent) -> LifeEvent:
         """
         Geolocate a single event. If no location is found, event.location remains None.
 

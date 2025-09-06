@@ -12,7 +12,8 @@ import os
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from location import FuzzyAddressBook
+
+from addressbook import FuzzyAddressBook
 
 # Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
