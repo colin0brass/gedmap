@@ -379,7 +379,6 @@ def write_geocache_summary(address_book: FuzzyAddressBook, output_file: str) -> 
         address_book (FuzzyAddressBook): Address book containing geolocated places.
         output_file (str): Output CSV file path.
     """
-
     # Prepare data for DataFrame
     records = []
     for place, location in address_book.addresses().items():

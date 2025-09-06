@@ -172,7 +172,14 @@ class Location:
         address (str): Address string.
         alt_addr (str): Alternative address string.
         canonical_addr (str): Canonical address.
-        ... (other optional attributes)
+        canonical_parts (dict): Canonical address parts.
+        type (str): Location type.
+        class_ (str): Class type.
+        icon (str): Icon name.
+        place_id (str): Place identifier.
+        boundry (str): Boundary info.
+        size (str): Size info.
+        importance (str): Importance score.
     """
 
     __slots__ = [
@@ -258,26 +265,14 @@ class Location:
         Returns:
             Location: A new Location instance with the same attributes.
         """
-        return Location(
-            used=self.used,
-            latitude=self.lat_lon.lat if self.lat_lon else None,
-            longitude=self.lat_lon.lon if self.lat_lon else None,
-            country_code=self.country_code,
-            country_name=self.country_name,
-            continent=self.continent,
-            found_country=self.found_country,
-            address=self.address,
-            alt_addr=self.alt_addr,
-            canonical_addr=self.canonical_addr,
-            canonical_parts=self.canonical_parts.copy() if self.canonical_parts else None,
-            type=self.type,
-            class_=self.class_,
-            icon=self.icon,
-            place_id=self.place_id,
-            boundry=self.boundry,
-            size=self.size,
-            importance=self.importance
-        )
+        new_obj = Location()
+        for slot in self.__slots__:
+            value = getattr(self, slot)
+            # For canonical_parts, make a copy if it's a dict
+            if slot == "canonical_parts" and value is not None:
+                value = value.copy()
+            setattr(new_obj, slot, value)
+        return new_obj
     
     def merge(self, other: "Location") -> "Location":
         """
@@ -285,6 +280,9 @@ class Location:
 
         Args:
             other (Location): Other Location to merge.
+
+        Returns:
+            Location: Merged Location instance.
         """
         merged = self.copy()
         if not isinstance(other, Location):

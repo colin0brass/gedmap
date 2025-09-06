@@ -174,18 +174,14 @@ class Person:
 
 class GedcomParser:
     """
-    Parses GEDCOM files and extracts people and places.
+    Parses GEDCOM files and extracts genealogical data.
 
     Attributes:
-        gedcom_file (Optional[str]): Path to GEDCOM file.
+        gedcom_file (Path): Path to GEDCOM file.
+        ... (other attributes)
     """
-    __slots__ = [
-        'gedcom_file'
-    ]
 
-    LINE_RE = re.compile(
-        r'^(\d+)\s+(?:@[^@]+@\s+)?([A-Z0-9_]+)(.*)$'
-    )  # allow optional @xref@ before the tag
+    LINE_RE = re.compile(r'^(0|[1-9][0-9]*)\s+([A-Z0-9_]+)(.*)$')
 
     def __init__(self, gedcom_file: Path = None):
         """

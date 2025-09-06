@@ -213,15 +213,13 @@ class Canonical:
     
 class Geocode:
     """
-    Handles geocoding and country/continent lookup for places.
+    Handles geocoding logic, cache management, and country/continent lookups for addresses.
 
     Attributes:
-        always_geocode (bool): Ignore cache if True.
+        always_geocode (bool): If True, always geocode and ignore cache.
         location_cache_file (str): Path to cache file.
-        geo_cache (Dict[str, dict]): Cached addresses.
-        geolocator (Nominatim): Geopy geocoder instance.
-        fallback_continent_map (Dict[str, str]): Fallback continent mapping from YAML.
-        ... (other config attributes)
+        geo_cache (GeoCache): Geocoded location cache manager.
+        ... (other attributes)
     """
     __slots__ = [
         'default_country', 'always_geocode', 'location_cache_file', 'additional_countries_codes_dict_to_add',
@@ -266,12 +264,52 @@ class Geocode:
         if self.geo_cache.location_cache_file:
             self.geo_cache.save_geo_cache()
 
-    def geocode_place(self, place: str, country_code: str, country_name: str, found_country: bool = False, address_depth: int = 0) -> Optional[Location]:
+    def get_address_and_countrycode(self, address: str) -> Tuple[str, str, str, bool]:
         """
-        Geocode a place string and return a Location object.
+        Given an address string, return (address, country_code, country_name, found).
 
         Args:
-            place (str): Place string.
+            address (str): Address string.
+
+        Returns:
+            Tuple[str, str, str, bool]: (address, country_code, country_name, found)
+        """
+        found = False
+        country_name = ''
+
+        address_lower = address.lower()
+        last_address_element = address_lower.split(',')[-1].strip()
+
+        for key in self.canonical.country_substitutions:
+            if last_address_element == key.lower():
+                new_country = self.canonical.country_substitutions[key]
+                logger.info(f"Substituting country '{last_address_element}' with '{new_country}' in address '{address}'")
+                address_lower = address_lower.replace(last_address_element, new_country)
+                country_name = new_country
+                found = True
+                break
+
+        if last_address_element in self.canonical.countrynames_lower:
+            found = True
+            for name in self.canonical.countrynames:
+                if name.lower() == last_address_element:
+                    country_name = name
+                    break
+
+        if not found and self.canonical.default_country.lower() != 'none':
+            logger.info(f"Adding default country '{self.canonical.default_country}' to address '{address}'")
+            address_lower = address_lower + ', ' + self.canonical.default_country
+            country_name = self.canonical.default_country
+
+        country_code = self.canonical.country_name_to_code_dict.get(country_name, 'none')
+        return (address_lower, country_code, country_name, found)
+
+    def geocode_address(self, address: str, country_code: str, country_name: str, found_country: bool = False, address_depth: int = 0) -> Optional[Location]:
+        """
+        Geocode an address string and return a Location object.
+
+        Args:
+            address (str): Address string.
             country_code (str): Country code.
             country_name (str): Country name.
             found_country (bool): Whether country was found.
@@ -282,24 +320,24 @@ class Geocode:
         """
         location = None
 
-        if not place:
+        if not address:
             return None
 
         max_retries = 3
         geo_location = None
         for attempt in range(max_retries):
             try:
-                geo_location = self.geolocator.geocode(place, country_codes=country_code, timeout=10)
+                geo_location = self.geolocator.geocode(address, country_codes=country_code, timeout=10)
                 time.sleep(self.geocode_sleep_interval)
                 if geo_location:
                     break
             except Exception as e:
-                logger.error(f"Error geocoding {place}: {e}")
+                logger.error(f"Error geocoding {address}: {e}")
                 if attempt < max_retries - 1:
-                    logger.info(f"Retrying geocode for {place} (attempt {attempt+2}/{max_retries}) after {self.geocode_sleep_interval} seconds...")
+                    logger.info(f"Retrying geocode for {address} (attempt {attempt+2}/{max_retries}) after {self.geocode_sleep_interval} seconds...")
                     time.sleep(self.geocode_sleep_interval)
                 else:
-                    logger.error(f"Giving up on geocoding {place} after {max_retries} attempts.")
+                    logger.error(f"Giving up on geocoding {address} after {max_retries} attempts.")
                     time.sleep(self.geocode_sleep_interval)
 
         if geo_location:
@@ -315,11 +353,11 @@ class Geocode:
             )
 
         if location is None and address_depth < 3:
-            logger.info(f"Retrying geocode for {place} with less precision")
-            parts = place.split(',')
+            logger.info(f"Retrying geocode for {address} with less precision")
+            parts = address.split(',')
             if len(parts) > 1:
                 less_precise_address = ','.join(parts[1:]).strip()
-                location = self.geocode_place(less_precise_address, country_code, country_name, address_depth + 1)
+                location = self.geocode_address(less_precise_address, country_code, country_name, found_country, address_depth + 1)
 
         return location
 
@@ -389,7 +427,7 @@ class Geocode:
                     logger.info(f"Country not found in cache for {use_place_name}, using default country: {default_country}")
 
         if not found_in_cache:
-            location = self.geocode_place(place_with_country, country_code, country_name, found_country, address_depth=0)
+            location = self.geocode_address(place_with_country, country_code, country_name, found_country, address_depth=0)
             if location is not None:
                 location.address = place
                 self.geo_cache.add_geo_cache_entry(place, location)
