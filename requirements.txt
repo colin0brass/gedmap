@@ -9,3 +9,5 @@ matplotlib
 numpy
 pyyaml
 rapidfuzz
+unidecode
+postal

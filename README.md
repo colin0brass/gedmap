@@ -78,10 +78,13 @@ python gedmap.py <gedcom_file> [options]
 - `--include_canonical`: Include canonical address and parts in location data
 - `--use_alt_places`: Use alternative place names from file (`<input_filename>_alt.csv`)
 
-### Example
+### Examples
 
 ```sh
 python gedmap.py family.ged --output_folder results --write_all --verbose
+python gedmap.py --write_all samples/royal92.ged
+python gedmap.py --write_all samples/bronte.ged
+python gedmap.py --write_all samples/pres2020.ged
 ```
 
 ## Output
