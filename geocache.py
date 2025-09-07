@@ -33,7 +33,8 @@ class GeoCache:
         self,
         cache_file: str,
         always_geocode: bool,
-        alt_addr_file: Optional[Path] = None
+        alt_addr_file: Optional[Path] = None,
+        file_geo_cache_path: Optional[Path] = None
     ):
         """
         Initialize the GeoCache object.
@@ -42,18 +43,22 @@ class GeoCache:
             cache_file (str): Path to the cache CSV file.
             always_geocode (bool): If True, ignore cache and always geocode.
             alt_addr_file (Optional[Path]): Path to alternative address file.
+            file_geo_cache_path (Optional[Path]): Path to per-file geo cache.
         """
         self.location_cache_file = cache_file
         self.always_geocode = always_geocode
         self.geo_cache: Dict[str, dict] = {}
         self.alt_addr_cache: Dict[str, dict] = {}
+        self.file_geo_cache_path = file_geo_cache_path
 
-        self.read_geo_cache()
+        self.geo_cache = self.read_geo_cache(self.location_cache_file)
+        self.geo_cache.update(self.read_geo_cache(self.file_geo_cache_path))
+        
         if alt_addr_file:
             self.read_alt_addr_file(alt_addr_file)
             self.add_alt_addr_to_cache()
 
-    def read_geo_cache(self) -> None:
+    def read_geo_cache(self, location_file_path: Optional[Path]) -> Dict[str, dict]:
         """
         Read geocoded location cache from the CSV file.
 
@@ -61,15 +66,15 @@ class GeoCache:
         Normalizes the 'found_country' field to boolean.
         If always_geocode is True or the cache file does not exist, skips loading.
         """
-        self.geo_cache = {}
+        geo_cache: Dict[str, dict] = {}
         if self.always_geocode:
             logger.info('Configured to ignore cache')
-            return
-        if not self.location_cache_file or not os.path.exists(self.location_cache_file):
-            logger.info(f'No location cache file found: {self.location_cache_file}')
-            return
+            return geo_cache
+        if not location_file_path or not os.path.exists(location_file_path):
+            logger.info(f'No location cache file found: {location_file_path}')
+            return geo_cache
         try:
-            with open(self.location_cache_file, newline='', encoding='utf-8') as f:
+            with open(location_file_path, newline='', encoding='utf-8') as f:
                 csv_reader = csv.DictReader(f, dialect='excel')
                 for line in csv_reader:
                     key = line.get('address', '').lower()
@@ -80,13 +85,15 @@ class GeoCache:
                         line['found_country'] = found_country_val.lower() in ('true', '1')
                     else:
                         line['found_country'] = bool(found_country_val)
-                    self.geo_cache[key] = line
+                    geo_cache[key] = line
         except FileNotFoundError as e:
             logger.warning(f'Location cache file not found: {e}')
         except csv.Error as e:
-            logger.error(f'CSV error reading location cache file {self.location_cache_file}: {e}')
+            logger.error(f'CSV error reading location cache file {location_file_path}: {e}')
         except Exception as e:
-            logger.error(f'Error reading location cache file {self.location_cache_file}: {e}')
+            logger.error(f'Error reading location cache file {location_file_path}: {e}')
+
+        return geo_cache
 
     def save_geo_cache(self) -> None:
         """

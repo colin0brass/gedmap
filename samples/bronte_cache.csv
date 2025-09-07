@@ -1,0 +1,8 @@
+address,alt_addr,canonical_addr,used,type,class_,icon,latitude,longitude,found_country,country_code,country_name
+"County Down, Ireland",,,1,,,,53.3395315,-6.2951498,True,IE,Ireland
+"Haworth, Yorks.",,,1,,,,-20.6315684,29.8425463,False,NONE,
+"Penzance, Cornwall",,,1,,,,50.1194794,-5.5352463,False,NONE,
+"Clough House, High Town",,,1,,,,51.8877641,-0.4120407,False,NONE,
+Howarth,,,1,,,,50.7176876,-3.4919307,False,NONE,
+"Thornton, Nr. Bradford",,,1,,,,53.7907753,-1.8540185,False,NONE,
+Scarborough,,,1,,,,54.2820009,-0.4011868,False,NONE,

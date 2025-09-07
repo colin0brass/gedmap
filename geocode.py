@@ -204,6 +204,7 @@ class Geocode:
         always_geocode: bool = False,
         alt_place_file_path: Optional[Path] = None,
         geo_config_path: Optional[Path] = None,
+        file_geo_cache_path: Optional[Path] = None,
         include_canonical: bool = False
     ):
         """
@@ -215,13 +216,14 @@ class Geocode:
             always_geocode (bool): Ignore cache if True.
             alt_place_file_path (Optional[Path]): Alternative place names file path.
             geo_config_path (Optional[Path]): Path to geocode.yaml configuration file.
+            file_geo_cache_path (Optional[Path]): Path to per-file geo cache.
             include_canonical (bool): Whether to include canonical address info.
         """
         self.default_country = default_country
         self.always_geocode = always_geocode
         self.location_cache_file = cache_file
 
-        self.geo_cache = GeoCache(cache_file, always_geocode, alt_place_file_path)
+        self.geo_cache = GeoCache(cache_file, always_geocode, alt_place_file_path, file_geo_cache_path)
         self.geolocator = Nominatim(user_agent="gedcom_geocoder")
         self.geo_config = GeoConfig(geo_config_path)
         self.canonical = Canonical(self.geo_config)

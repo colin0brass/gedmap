@@ -9,6 +9,8 @@ GEDCOM mapping and visualization
 This is mainly being used currently to expore workflow and implementation ideas for discussion with the author of this project:
 - https://github.com/D-Jeffrey/gedcom-to-visualmap
 
+Using some of the sample files from gedcom-to-visualmap as above
+
 ## Features
 
 - Parses GEDCOM files and extracts people, events, and places

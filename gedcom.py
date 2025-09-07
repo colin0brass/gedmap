@@ -481,9 +481,9 @@ class GeolocatedGedcom(Gedcom):
             location_cache_file: Path,
             default_country: Optional[str] = None,
             always_geocode: Optional[bool] = False,
-            use_alt_places: Optional[bool] = False,
             alt_place_file_path: Optional[Path] = None,
             geo_config_path: Optional[Path] = None,
+            file_geo_cache_path: Optional[Path] = None,
             include_canonical: bool = True
     ):
         """
@@ -494,7 +494,10 @@ class GeolocatedGedcom(Gedcom):
             location_cache_file (str): Location cache file.
             default_country (Optional[str]): Default country for geocoding.
             always_geocode (Optional[bool]): Whether to always geocode.
-            use_alt_places (Optional[bool]): Whether to use alternative place names.
+            alt_place_file_path (Optional[Path]): Path to alternative place file.
+            geo_config_path (Optional[Path]): Path to geographic configuration file.
+            file_geo_cache_path (Optional[Path]): Path to per-file geo cache.
+            include_canonical (bool): Whether to include canonical addresses.
         """
         super().__init__(gedcom_file)
 
@@ -504,8 +507,9 @@ class GeolocatedGedcom(Gedcom):
             cache_file=location_cache_file,
             default_country=default_country,
             always_geocode=always_geocode,
-            alt_place_file_path=alt_place_file_path if use_alt_places else None,
+            alt_place_file_path=alt_place_file_path if alt_place_file_path else None,
             geo_config_path=geo_config_path if geo_config_path else None,
+            file_geo_cache_path=file_geo_cache_path,
             include_canonical=include_canonical
         )
 

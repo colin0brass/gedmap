@@ -38,7 +38,7 @@ from summary import (
 )
 
 # Constants
-GEO_CACHE_FILENAME = 'geo_cache.csv'
+GLOBAL_GEO_CACHE_FILENAME = 'geo_cache.csv'
 FILE_ALT_PLACE_FILENAME_SUFFIX = '_alt.csv'
 FILE_GEOCACHE_FILENAME_SUFFIX = '_cache.csv'
 GEO_CONFIG_FILENAME = 'geo_config.yaml'
@@ -55,8 +55,8 @@ def get_arg_parser() -> argparse.ArgumentParser:
         --default_country (str): Default country for geocoding.
         --always-geocode: Always geocode, ignore cache.
         --geo_cache_filename (str): Geo-location cache filename to use.
-        --use_alt_places: Use alternative place names from file (<input_filename>_alt.csv).
-        --use_file_geocache: Use geo-cache from file (<input_filename>_cache.csv).
+        --skip_file_alt_places: Ignore alternative place names for each input file (<input_filename>_alt.csv).
+        --skip_file_geocache: Ignore geo-cache for each input file (<input_filename>_cache.csv).
         --write_places_summary: Save places summary as CSV.
         --write_people_summary: Save people summary as CSV.
         --write_countries_summary: Save countries summary and heatmap.
@@ -77,12 +77,12 @@ def get_arg_parser() -> argparse.ArgumentParser:
         help='Default country for geocoding, e.g. "England"')
     parser.add_argument('--always-geocode', action='store_true',
         help='Always geocode, ignore cache')
-    parser.add_argument('--geo_cache_filename', type=str, default=GEO_CACHE_FILENAME,
-        help='Geo-location cache filename to use')
-    parser.add_argument('--use_alt_places', action='store_true',
-        help=f'Use alternative place names from file (<input_filename>{FILE_ALT_PLACE_FILENAME_SUFFIX})')
-    parser.add_argument('--use_file_geocache', action='store_true',
-        help=f'Use geo-cache from file (<input_filename>{FILE_GEOCACHE_FILENAME_SUFFIX})')
+    parser.add_argument('--geo_cache_filename', type=str, default=GLOBAL_GEO_CACHE_FILENAME,
+        help='Global geo-location cache filename to use')
+    parser.add_argument('--skip_file_alt_places', action='store_true',
+        help=f'Ignore alternative place names for each input file (<input_filename>{FILE_ALT_PLACE_FILENAME_SUFFIX})')
+    parser.add_argument('--skip_file_geocache', action='store_true',
+        help=f'Ignore geo-cache for each input file (<input_filename>{FILE_GEOCACHE_FILENAME_SUFFIX})')
     parser.add_argument('--write_places_summary', action='store_true',
         help='Save places summary as CSV')
     parser.add_argument('--write_people_summary', action='store_true',
@@ -148,16 +148,17 @@ def main() -> None:
         base_file_name = input_path.stem
 
         logger.info(f'Processing GEDCOM file: {gedcom_file}')
-        geo_cache_path = input_path.parent / args.geo_cache_filename
+        global_geo_cache_path = input_path.parent / args.geo_cache_filename
         alt_place_file_path = input_path.parent / f"{base_file_name}{FILE_ALT_PLACE_FILENAME_SUFFIX}"
+        file_geo_cache_path = input_path.parent / f"{base_file_name}{FILE_GEOCACHE_FILENAME_SUFFIX}"
         my_gedcom = GeolocatedGedcom(
             gedcom_file=input_path.resolve(),
-            location_cache_file=geo_cache_path,
+            location_cache_file=global_geo_cache_path,
             default_country=args.default_country,
             always_geocode=args.always_geocode,
-            use_alt_places=args.use_alt_places,
-            alt_place_file_path=alt_place_file_path if args.use_alt_places else None,
+            alt_place_file_path=alt_place_file_path if not args.skip_file_alt_places else None,
             geo_config_path=geo_config_path if geo_config_path.exists() else None,
+            file_geo_cache_path=file_geo_cache_path if not args.skip_file_geocache else None,
             include_canonical= args.include_canonical
         )
 
@@ -189,12 +190,12 @@ def main() -> None:
             write_birth_death_countries_summary(args, my_gedcom.people, str(countries_summary_file), base_file_name)
 
         if args.write_geocache_per_input_file or args.write_all:
-            per_file_cache = output_folder / f"{base_file_name}_geo_cache.csv"
+            per_file_cache = output_folder / f"{base_file_name}{FILE_GEOCACHE_FILENAME_SUFFIX}"
             per_file_cache = per_file_cache.resolve()
             logger.info(f"Writing geo cache to {per_file_cache}")
             write_geocache_summary(my_gedcom.address_book, str(per_file_cache))
 
-        if args.use_alt_places and (args.write_alt_place_summary or args.write_all):
+        if not args.skip_file_alt_places and (args.write_alt_place_summary or args.write_all):
             alt_places_summary_file = output_folder / f"{base_file_name}_alt_places.csv"
             alt_places_summary_file = alt_places_summary_file.resolve()
             logger.info(f"Writing alternative places summary to {alt_places_summary_file}")
