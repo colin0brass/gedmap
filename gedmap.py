@@ -2,6 +2,24 @@
 gedmap.py - Main entry point for GEDCOM geolocation and KML export.
 
 Processes GEDCOM files, geocodes places, writes summaries, and generates KML output.
+
+Workflow:
+        - load geo config (countries, substitutions, etc)
+        - load global geo cache if applicable
+        - for each input file:
+            - load gedcom file
+            - load per file alt places if applicable
+            - load per file geo cache if applicable
+            - apply geo cache to place list, by alternate address if it exists, or normal addr
+            - geolocate any remaining places that don't already have lat/lon
+            - save updated geo cache
+            - write KML output
+            - write summaries if requested
+        - other thoughts
+            - trying "rapidfuzz" for fuzzy string matching for address resolution; not yet evaluated benefit
+            - started adding "libpostal" for address parsing and normalization; not fully integrated yet
+            - consider flagging locations that were manually vs automatically geocoded
+            - consider adding a confidence score to geocoded locations
 """
 
 import argparse
@@ -69,6 +87,8 @@ def get_arg_parser() -> argparse.ArgumentParser:
         help='Enable verbose output')
     parser.add_argument('--output_folder', type=str, default='output',
         help='Folder to put output files (default: ./output)')
+    parser.add_argument('--include_canonical', action='store_true',
+        help='Include canonical address and parts in location data')
     return parser
 
 def main() -> None:
@@ -91,7 +111,7 @@ def main() -> None:
 
     script_dir = Path(__file__).parent.resolve()
     geo_config_path = script_dir / GEO_CONFIG_FILENAME
-        
+
     output_folder = Path(args.output_folder).resolve()
     output_folder.mkdir(parents=True, exist_ok=True)
 
@@ -101,19 +121,6 @@ def main() -> None:
         if not input_path.is_absolute():
             input_path = (Path.cwd() / input_path).resolve()
         base_file_name = input_path.stem
-
-        # TO DO - load alternate address file, and apply to place list
-        # TO DO - load global geo cache if applicable
-        # TO DO - load per file geo cache if applicable
-        # TO DO - apply geo cache to place list, by alternate address if it exists, or normal addr
-        # TO DO - geolocate any remaining places that don't already have lat/lon
-        # TO DO - consider flagging locations that were manually vs automatically geocoded
-
-        # other thoughts
-        # copilot suggested fuzzy address matching; how would it have done that?
-        # is there something there that could improve this flow?
-        # ok, copilot says there is "rapidfuzz", to use fuzzy string matching for address resolution
-        # consider also an ML enhanced address resolution such as https://github.com/openvenues/libpostal
 
         logger.info(f'Processing GEDCOM file: {gedcom_file}')
         geo_cache_path = input_path.parent / args.geo_cache_filename
@@ -126,6 +133,7 @@ def main() -> None:
             use_alt_places=args.use_alt_places,
             alt_place_file_path=alt_place_file_path if args.use_alt_places else None,
             geo_config_path=geo_config_path if geo_config_path.exists() else None,
+            include_canonical= args.include_canonical
         )
 
         logger.info('Saving updated geo cache...')

@@ -415,16 +415,23 @@ def write_alt_places_summary(args: Namespace, address_book: FuzzyAddressBook, ou
         address_book (FuzzyAddressBook): Address book containing geolocated places.
         output_file (str): Output CSV file path.
     """
-    records = list()
+    records = []
+    has_canonical = False
     for alt_addr in address_book.get_alt_addr_list():
         associated_addresses = address_book.get_address_list_for_alt_addr(alt_addr)
-
         for address in associated_addresses:
             location = address_book.get_address(address)
             canonical_addr = getattr(location, 'canonical_addr', None) if location else None
+            if canonical_addr:
+                has_canonical = True
             records.append((alt_addr, len(associated_addresses), address, canonical_addr if canonical_addr else ''))
 
-    df = pd.DataFrame(records, columns=['alt_addr', 'count', 'associated_address', 'canonical_address'])
+    columns = ['alt_addr', 'count', 'associated_address', 'canonical_address']
+    if not has_canonical:
+        columns.remove('canonical_address')
+        records = [r[:-1] for r in records]
+
+    df = pd.DataFrame(records, columns=columns)
     try:
         df.to_csv(output_file, index=False)
     except IOError as e:

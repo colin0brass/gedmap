@@ -181,7 +181,9 @@ class GedcomParser:
         ... (other attributes)
     """
 
-    LINE_RE = re.compile(r'^(0|[1-9][0-9]*)\s+([A-Z0-9_]+)(.*)$')
+    GEDCOM_LINE_RE = re.compile(
+        r'^(?P<level_s>\d+)\s+(?:@[^@]+@\s+)?(?P<tag>[A-Z0-9_]+)(?P<rest>.*)$'
+    )  # allow optional @xref@ before the tag
 
     def __init__(self, gedcom_file: Path = None):
         """
@@ -220,12 +222,14 @@ class GedcomParser:
                 open(temp_path, 'w', encoding='utf-8', newline='') as outfile:
                 for raw in infile:
                     line = raw.rstrip('\r\n')
-                    m = self.LINE_RE.match(line)
+                    m = self.GEDCOM_LINE_RE.match(line)
                     if not m:
                         outfile.write(raw)
                         continue
 
-                    level_s, tag, rest = m.groups()
+                    level_s = m.group('level_s')
+                    tag = m.group('tag')
+                    rest = m.group('rest')
                     level = int(level_s)
 
                     if tag in ('CONC', 'CONT'):
@@ -480,7 +484,8 @@ class GeolocatedGedcom(Gedcom):
             always_geocode: Optional[bool] = False,
             use_alt_places: Optional[bool] = False,
             alt_place_file_path: Optional[Path] = None,
-            geo_config_path: Optional[Path] = None
+            geo_config_path: Optional[Path] = None,
+            include_canonical: bool = True
     ):
         """
         Initialize GeolocatedGedcom.
@@ -501,7 +506,8 @@ class GeolocatedGedcom(Gedcom):
             default_country=default_country,
             always_geocode=always_geocode,
             alt_place_file_path=alt_place_file_path if use_alt_places else None,
-            geo_config_path=geo_config_path if geo_config_path else None
+            geo_config_path=geo_config_path if geo_config_path else None,
+            include_canonical=include_canonical
         )
 
         self.read_full_address_book()

@@ -88,6 +88,8 @@ class Canonical:
         self.country_code_to_name_dict = {v: k for k, v in self.country_name_to_code_dict.items()}
         self.country_code_to_continent_dict = {code: self.country_code_to_name_dict.get(code) for code in self.country_code_to_name_dict.keys()}
 
+        self.country_substitutions_lower = {k.lower(): v for k, v in self.country_substitutions.items()}
+        self.countrynames_dict_lower = {name.lower(): name for name in self.countrynames}
 
     def __strip_and_norm(self, address: str) -> str:
         if not address: return ""
@@ -132,7 +134,7 @@ class Canonical:
         canonical_address = ', '.join(segments)
         return canonical_parts, canonical_address
 
-    def get_canonical(self, address: str) -> Tuple[str, Dict[str, str]]:
+    def get_canonical(self, address: str, country_name: str = None) -> Tuple[str, Dict[str, str]]:
         address_clean = self.__strip_and_norm(address)
         address_variants = self.__expand_variants(address_clean)
         best_variant_canonical = None
@@ -146,6 +148,12 @@ class Canonical:
                     best_variant_canonical = address_canonical
                     best_len = len(address_canonical)
 
+        if address_parts.get('country', '') == '' and country_name is not None:
+            address_parts['country'] = country_name
+            if best_variant_canonical:
+                best_variant_canonical = f"{best_variant_canonical}, {address_parts['country']}"
+            else:
+                best_variant_canonical = address_parts['country']
         return best_variant_canonical, address_parts
 
     def country_code_to_continent(self, country_code: str) -> Optional[str]:
@@ -187,21 +195,16 @@ class Canonical:
         place_lower = place.lower()
         last_place_element = place_lower.split(',')[-1].strip()
 
-        for key in self.country_substitutions:
-            if last_place_element == key.lower():
-                new_country = self.country_substitutions[key]
-                logger.info(f"Substituting country '{last_place_element}' with '{new_country}' in place '{place}'")
-                place_lower = place_lower.replace(last_place_element, new_country)
-                country_name = new_country
-                found = True
-                break
-
-        if last_place_element in self.countrynames_lower:
+        if last_place_element in self.country_substitutions_lower:
+            new_country = self.country_substitutions_lower[last_place_element]
+            logger.info(f"Substituting country '{last_place_element}' with '{new_country}' in place '{place}'")
+            place_lower = place_lower.replace(last_place_element, new_country)
+            country_name = new_country
             found = True
-            for name in self.countrynames:
-                if name.lower() == last_place_element:
-                    country_name = name
-                    break
+
+        if last_place_element in self.countrynames_dict_lower:
+            country_name = self.countrynames_dict_lower[last_place_element]
+            found = True
 
         if not found and self.default_country.lower() != 'none':
             logger.info(f"Adding default country '{self.default_country}' to place '{place}'")
@@ -225,7 +228,8 @@ class Geocode:
         'default_country', 'always_geocode', 'location_cache_file', 'additional_countries_codes_dict_to_add',
         'additional_countries_to_add', 'country_substitutions', 'geo_cache',
         'geolocator', 'canonical', 'countrynames', 'countrynames_lower', 'country_name_to_code_dict',
-        'country_code_to_name_dict', 'country_code_to_continent_dict', 'fallback_continent_map'
+        'country_code_to_name_dict', 'country_code_to_continent_dict', 'fallback_continent_map',
+        'include_canonical'
     ]
     geocode_sleep_interval = 1  # Delay due to Nominatim request limit
 
@@ -235,7 +239,8 @@ class Geocode:
         default_country: Optional[str] = None,
         always_geocode: bool = False,
         alt_place_file_path: Optional[Path] = None,
-        geo_config_path: Optional[Path] = None
+        geo_config_path: Optional[Path] = None,
+        include_canonical: bool = False
     ):
         """
         Initialize the Geocode object, loading country info and cache.
@@ -256,6 +261,8 @@ class Geocode:
         self.geolocator = Nominatim(user_agent="gedcom_geocoder")
 
         self.canonical = Canonical(geo_config_path)
+
+        self.include_canonical = include_canonical
 
     def save_geo_cache(self) -> None:
         """
@@ -406,13 +413,15 @@ class Geocode:
         default_country = self.canonical.default_country if self.canonical.default_country else ''
 
         (place_with_country, country_code, country_name, found_country) = self.canonical.get_place_and_countrycode(use_place_name)
-        canonical, parts = self.canonical.get_canonical(use_place_name)
+        if self.include_canonical:
+            canonical, parts = self.canonical.get_canonical(use_place_name, country_name if found_country else default_country)
         if cache_entry and not self.always_geocode:
             if cache_entry.get('latitude') and cache_entry.get('longitude'):
                 found_in_cache = True
                 location = Location.from_dict(cache_entry)
-                location.canonical_addr = canonical
-                location.canonical_parts = parts
+                if self.include_canonical:
+                    location.canonical_addr = canonical
+                    location.canonical_parts = parts
                 if cache_entry.get('found_country', False) == False or cache_entry.get('country_name', '') == '':
                     if found_country:
                         logger.info(f"Found country in cache for {use_place_name}, but it was not marked as found.")

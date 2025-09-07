@@ -48,10 +48,14 @@ class FuzzyAddressBook:
         if existing_key is not None:
             # If a similar (or identical) address exists, create or update the entry with the same alt_addr
             existing_location = self.__addresses[existing_key]
-            canonical_addr = existing_location.canonical_addr
             if existing_key == address: # exact match; use existing location and increment usage
-                location = location.merge(existing_location)
-                location.used = existing_location.used + 1
+                if location is None:
+                    logger.warning(f"Exact match found for address '{address}' but no location provided; using existing location.")
+                if isinstance(existing_location, Location):
+                    location = existing_location.merge(location)
+                    location.used = existing_location.used + 1
+                if not isinstance(location, Location):
+                    location = Location(address=address, used=1)
             # Update the existing entry with the new location data
             self.__add_address(existing_key, location)
         else:
@@ -73,7 +77,7 @@ class FuzzyAddressBook:
         return self.__addresses.get(key)
 
     def __add_alt_addr_to_address_lookup(self, alt_addr: str, address: str):
-        if alt_addr and alt_addr.lower() != 'none':
+        if alt_addr is not None and alt_addr != '' and alt_addr.lower() != 'none':
             if alt_addr not in self.__alt_addr_to_address_lookup:
                 self.__alt_addr_to_address_lookup[alt_addr] = []
             self.__alt_addr_to_address_lookup[alt_addr].append(address)

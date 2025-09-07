@@ -276,7 +276,7 @@ class Location:
     
     def merge(self, other: "Location") -> "Location":
         """
-        Merge another Location into this one, preferring non-None values.
+        Merge another Location into this one, preferring non-empty values.
 
         Args:
             other (Location): Other Location to merge.
@@ -292,6 +292,6 @@ class Location:
                 if merged.lat_lon is None and other.lat_lon is not None:
                     merged.lat_lon = other.lat_lon
             else:
-                if getattr(merged, slot) is None and getattr(other, slot) is not None:
+                if not getattr(merged, slot) and getattr(other, slot):
                     setattr(merged, slot, getattr(other, slot))
         return merged
