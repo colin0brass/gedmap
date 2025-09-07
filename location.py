@@ -8,7 +8,6 @@ import logging
 import re
 from typing import Dict, Optional, Union
 
-# Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
 
 class LatLon:
@@ -43,7 +42,7 @@ class LatLon:
             lat (str|float|None): Latitude value or string.
 
         Returns:
-            Optional[float]: Parsed latitude or None.
+            Optional[float]: Parsed latitude or None if invalid.
         """
         if lat is None:
             return None
@@ -73,7 +72,7 @@ class LatLon:
             lon (str|float|None): Longitude value or string.
 
         Returns:
-            Optional[float]: Parsed longitude or None.
+            Optional[float]: Parsed longitude or None if invalid.
         """
         if lon is None:
             return None
@@ -96,16 +95,16 @@ class LatLon:
 
     def is_valid(self) -> bool:
         """
-        Return True if both latitude and longitude are not None.
+        Check if both latitude and longitude are not None.
 
         Returns:
-            bool: True if valid, False otherwise.
+            bool: True if both latitude and longitude are valid, False otherwise.
         """
         return self.lat is not None and self.lon is not None
 
     def __repr__(self) -> str:
         """
-        String representation for debugging.
+        Return a string representation for debugging.
 
         Returns:
             str: Representation of LatLon.
@@ -114,7 +113,7 @@ class LatLon:
 
     def __str__(self) -> str:
         """
-        User-friendly string representation.
+        Return a user-friendly string representation.
 
         Returns:
             str: String representation of LatLon.
@@ -124,7 +123,7 @@ class LatLon:
     @property
     def latitude(self) -> Optional[float]:
         """
-        Returns the latitude value.
+        Get the latitude value.
 
         Returns:
             Optional[float]: Latitude.
@@ -134,7 +133,7 @@ class LatLon:
     @property
     def longitude(self) -> Optional[float]:
         """
-        Returns the longitude value.
+        Get the longitude value.
 
         Returns:
             Optional[float]: Longitude.
@@ -150,7 +149,7 @@ class LatLon:
             s (str): String representation.
 
         Returns:
-            LatLon: Parsed LatLon object.
+            LatLon: Parsed LatLon object, or LatLon(None, None) if invalid.
         """
         parts = s.split(',')
         if len(parts) == 2:
@@ -186,6 +185,7 @@ class Location:
         'used', 'lat_lon', 'country_code', 'country_name', 'continent', 'found_country', 'address',
         'alt_addr', 'canonical_addr', 'canonical_parts', 'type', 'class_', 'icon', 'place_id', 'boundry', 'size', 'importance'
     ]
+
     def __init__(
         self,
         used: int = 0,
@@ -209,6 +209,26 @@ class Location:
     ):
         """
         Initialize a Location object with geocoded information.
+
+        Args:
+            used (int): Usage count.
+            latitude (float|None): Latitude value.
+            longitude (float|None): Longitude value.
+            country_code (str|None): Country code.
+            country_name (str|None): Country name.
+            continent (str|None): Continent name.
+            found_country (bool|None): Whether country was found.
+            address (str|None): Address string.
+            alt_addr (str|None): Alternative address string.
+            canonical_addr (str|None): Canonical address.
+            canonical_parts (dict|None): Canonical address parts.
+            type (str|None): Location type.
+            class_ (str|None): Class type.
+            icon (str|None): Icon name.
+            place_id (str|None): Place identifier.
+            boundry (str|None): Boundary info.
+            size (str|None): Size info.
+            importance (str|None): Importance score.
         """
         self.used = used
         self.lat_lon = LatLon(latitude, longitude) if (latitude is not None and longitude is not None) else None
@@ -219,7 +239,7 @@ class Location:
         self.address = address
         self.alt_addr = alt_addr
         self.canonical_addr = canonical_addr
-        self.canonical_parts = {}
+        self.canonical_parts = canonical_parts
         self.type = type
         self.class_ = class_
         self.icon = icon

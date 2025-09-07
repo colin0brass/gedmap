@@ -2,6 +2,19 @@
 gedmap.py - Main entry point for GEDCOM geolocation and KML export.
 
 Processes GEDCOM files, geocodes places, writes summaries, and generates KML output.
+
+Workflow:
+    1. Parse command-line arguments for input files, output folder, and options.
+    2. For each GEDCOM file:
+        - Resolve file paths and output locations.
+        - Parse and correct GEDCOM file structure if needed.
+        - Geocode places using OpenStreetMap/Nominatim, with caching and fuzzy matching.
+        - Optionally use alternative place/address files for improved geocoding.
+        - Save updated geocoding cache.
+        - Export events and relationships to KML for Google Earth.
+        - Write summary CSVs for places, people, countries, and alternative addresses.
+        - Generate birth/death country heatmaps and other visualizations.
+    3. All output files are saved in the specified output folder.
 """
 
 import argparse
@@ -36,6 +49,23 @@ def get_arg_parser() -> argparse.ArgumentParser:
 
     Returns:
         argparse.ArgumentParser: Configured argument parser.
+
+    Options:
+        input_files (str): One or more GEDCOM files to process.
+        --default_country (str): Default country for geocoding.
+        --always-geocode: Always geocode, ignore cache.
+        --geo_cache_filename (str): Geo-location cache filename to use.
+        --use_alt_places: Use alternative place names from file (<input_filename>_alt.csv).
+        --use_file_geocache: Use geo-cache from file (<input_filename>_cache.csv).
+        --write_places_summary: Save places summary as CSV.
+        --write_people_summary: Save people summary as CSV.
+        --write_countries_summary: Save countries summary and heatmap.
+        --write_geocache_per_input_file: Save geo-cache for each input file.
+        --write_alt_place_summary: Save alternative place names summary as CSV.
+        --write_all: Save all summaries.
+        --verbose: Enable verbose output.
+        --output_folder (str): Folder to put output files.
+        --include_canonical: Include canonical address and parts in location data.
     """
     parser = argparse.ArgumentParser(
         description='Convert GEDCOM to KML and lookup addresses',
@@ -76,7 +106,20 @@ def get_arg_parser() -> argparse.ArgumentParser:
 def main() -> None:
     """
     Main entry point for the gedmap script.
-    Parses arguments, processes GEDCOM files, geolocates places, writes summaries and KML output.
+
+    Parses arguments, processes GEDCOM files, geolocates places, writes summaries, and generates KML output.
+
+    Workflow:
+        - Parse CLI arguments.
+        - For each input GEDCOM file:
+            - Resolve paths and filenames.
+            - Parse and correct GEDCOM file.
+            - Geocode places and cache results.
+            - Optionally use alternative place/address files.
+            - Save updated cache.
+            - Export events and relationships to KML.
+            - Write summary CSVs and visualizations.
+        - Save all outputs in the specified output folder.
     """
     parser = get_arg_parser()
     args = parser.parse_args()

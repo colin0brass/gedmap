@@ -20,7 +20,6 @@ from geocode import Geocode
 from location import LatLon, Location
 from addressbook import FuzzyAddressBook
 
-# Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
 
 class LifeEvent:

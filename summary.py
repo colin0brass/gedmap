@@ -1,7 +1,7 @@
 """
-summary.py - Functions for writing summary CSVs for GEDCOM geolocation.
+summary.py - Functions for writing summary CSVs and visualizations for GEDCOM geolocation.
 
-Contains functions to write places, people, and country summaries.
+Contains functions to write places, people, country summaries, and birth/death heatmaps.
 """
 
 import csv
@@ -15,18 +15,18 @@ import matplotlib.pyplot as plt
 
 from addressbook import FuzzyAddressBook
 
-# Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
 
 def write_places_summary(args: Namespace, address_book: FuzzyAddressBook, output_file: str) -> None:
     """
     Write a summary of all geolocated places to a CSV file.
+
     Each row contains: count, latitude, longitude, found_country,
     place, country_name, continent.
 
     Args:
         args (Namespace): Parsed CLI arguments.
-        full_geolocation_dict (dict): Dictionary of geolocated places.
+        address_book (FuzzyAddressBook): Address book containing geolocated places.
         output_file (str): Output CSV file path.
     """
     try:
@@ -55,6 +55,7 @@ def write_places_summary(args: Namespace, address_book: FuzzyAddressBook, output
 def write_people_summary(args: Namespace, people: Dict[str, Any], output_file: str) -> None:
     """
     Write a summary of all people to a CSV file.
+
     Each row contains: ID, Name, birth/death place/date/country/continent.
 
     Args:
@@ -106,6 +107,7 @@ def write_people_summary(args: Namespace, people: Dict[str, Any], output_file: s
 def save_birth_death_heatmap_matrix(birth_death_countries_summary: Dict[Any, Any], output_image_file: str, gedcom_file_name: str) -> None:
     """
     Generate and save a heatmap image showing birth/death country pairs by continent.
+
     Adds a footer with filename and total number of people.
 
     Args:
@@ -330,6 +332,7 @@ def save_birth_death_heatmap_matrix(birth_death_countries_summary: Dict[Any, Any
 def write_birth_death_countries_summary(args: Namespace, people: Dict[str, Any], output_file: str, gedcom_file_name: str) -> None:
     """
     Write a summary of birth and death countries to a CSV file.
+
     Also generates a heatmap matrix image showing birth/death country pairs by continent.
 
     Args:
@@ -373,7 +376,9 @@ def write_birth_death_countries_summary(args: Namespace, people: Dict[str, Any],
 
 def write_geocache_summary(address_book: FuzzyAddressBook, output_file: str) -> None:
     """
-    Write the geocoded location cache to a CSV file.
+    Write the geocoded location cache to a CSV file using pandas DataFrame.
+
+    Drops duplicate addresses, keeping the first occurrence.
 
     Args:
         address_book (FuzzyAddressBook): Address book containing geolocated places.
@@ -381,21 +386,11 @@ def write_geocache_summary(address_book: FuzzyAddressBook, output_file: str) -> 
     """
     # Prepare data for DataFrame
     records = []
-    for place, location in address_book.addresses().items():
-        records.append({
-            'address': getattr(location, 'alt_addr', '') if location and getattr(location, 'alt_addr', '') else getattr(location, 'address', ''),
-            'country_name': getattr(location, 'country_name', '') if location else '',
-            'country_code': getattr(location, 'country_code', '') if location else '',
-            'continent': getattr(location, 'continent', '') if location else '',
-            'latitude': getattr(location.lat_lon, 'lat', '') if location and getattr(location, 'lat_lon', None) else '',
-            'longitude': getattr(location.lat_lon, 'lon', '') if location and getattr(location, 'lat_lon', None) else '',
-            'found_country': getattr(location, 'found_country', '') if location else '',
-        })
+    for place in address_book.get_address_list():
+        record = address_book.get_summary_row_dict(place)
+        records.append(record)
 
-    df = pd.DataFrame(records, columns=[
-        'address', 'country_name', 'country_code', 'continent',
-        'latitude', 'longitude', 'found_country'
-    ])
+    df = pd.DataFrame(records, columns=address_book.summary_columns)
 
     # Drop rows with duplicate 'address', keeping the first occurrence
     df = df.drop_duplicates(subset=['address'], keep='first')
@@ -408,7 +403,8 @@ def write_geocache_summary(address_book: FuzzyAddressBook, output_file: str) -> 
 def write_alt_places_summary(args: Namespace, address_book: FuzzyAddressBook, output_file: str) -> None:
     """
     Write a summary of all alternative place names to a CSV file.
-    Each row contains: alt_addr, list of associated addresses.
+
+    Each row contains: alt_addr, count, associated_address, and optionally canonical_address.
 
     Args:
         args (Namespace): Parsed CLI arguments.

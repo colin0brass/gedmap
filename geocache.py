@@ -12,21 +12,21 @@ from typing import Dict, Optional, Tuple
 
 from location import Location
 
-# Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
 
 class GeoCache:
     """
-    GeoCache manages reading and writing of geocoded location cache data for GEDCOM mapping.
+    Manages reading and writing of geocoded location cache data for GEDCOM mapping.
 
-    This class loads cached geocoding results from a CSV file, normalizes fields,
-    and provides methods to save updated cache data back to disk. It ensures
+    Loads cached geocoding results from a CSV file, normalizes fields,
+    and provides methods to save updated cache data back to disk. Ensures
     consistent handling of fields such as 'found_country' and tracks usage counts.
 
     Attributes:
         location_cache_file (str): Path to the cache CSV file.
         always_geocode (bool): If True, ignore cache and always geocode.
         geo_cache (Dict[str, dict]): Dictionary mapping place names to cached geocode data.
+        alt_addr_cache (Dict[str, dict]): Dictionary mapping place names to alternative address data.
     """
 
     def __init__(
@@ -125,7 +125,10 @@ class GeoCache:
 
     def read_alt_addr_file(self, alt_addr_file: Optional[Path]) -> None:
         """
-        Read alternative address names from file.
+        Read alternative address names from a CSV file.
+
+        Args:
+            alt_addr_file (Optional[Path]): Path to alternative address file.
         """
         if not alt_addr_file or not os.path.exists(alt_addr_file):
             logger.info(f'No alternative address file found: {alt_addr_file}')
@@ -198,6 +201,8 @@ class GeoCache:
     def add_alt_addr_to_cache(self) -> None:
         """
         Add alternative address names to the cache.
+
+        Iterates through alt_addr_cache and adds entries to geo_cache if not already present.
         """
         for address, data in self.alt_addr_cache.items():
             if address.lower() not in self.geo_cache:

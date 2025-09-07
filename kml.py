@@ -4,19 +4,16 @@ kml.py - KML exporter for geolocated GEDCOM data.
 Exports genealogical events and relationships to KML for visualization in Google Earth.
 """
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 import logging
 import datetime
-
 import simplekml
 
 from location import LatLon
 from gedcom import GeolocatedGedcom, Person
 
-# Re-use higher-level logger (inherits configuration from main script)
 logger = logging.getLogger(__name__)
 
-# Constants for marker icons
 BIRTH_ICON = 'http://maps.google.com/mapfiles/kml/paddle/pink-blank.png'
 MARRIAGE_ICON = 'http://maps.google.com/mapfiles/kml/paddle/grn-blank.png'
 DEATH_ICON = 'http://maps.google.com/mapfiles/kml/paddle/wht-blank.png'
@@ -32,6 +29,7 @@ class KmlExporter:
         marker_style (Dict[str, dict]): Marker style configuration.
         line_types (List[str]): Types of lines to draw (e.g., parent links).
     """
+
     __slots__ = [
         'kml_file', 'kml', 'kml_folders'
     ]
@@ -178,6 +176,7 @@ class KML_Life_Lines_Creator:
         use_hyperlinks (bool): Whether to use hyperlinks in descriptions.
         main_person_id (Optional[str]): Main person to focus on.
     """
+
     __slots__ = [
         'kml_instance', 'gedcom', 'kml_point_to_person_lookup', 'kml_person_to_point_lookup',
         'kml_person_to_placemark_lookup', 'use_hyperlinks', 'main_person_id'
@@ -189,8 +188,8 @@ class KML_Life_Lines_Creator:
         Initialize the KML life lines creator.
 
         Args:
-            kml_file (str): Path to output KML file.
             gedcom (GeolocatedGedcom): Geolocated GEDCOM data.
+            kml_file (str): Path to output KML file.
             use_hyperlinks (bool): Use hyperlinks in descriptions.
             main_person_id (Optional[str]): Main person to focus on.
         """
@@ -338,7 +337,9 @@ class KML_Life_Lines:
         kml_file (str): Path to output KML file.
         kml_life_lines_creator (KML_Life_Lines_Creator): Instance of the KML life lines creator.
     """
+
     __slots__ = ['gedcom', 'kml_file', 'kml_life_lines_creator']
+
     def __init__(self, gedcom: GeolocatedGedcom, kml_file: str,
                  connect_parents: bool = True, save: bool = True):
         """
@@ -354,15 +355,12 @@ class KML_Life_Lines:
             save (bool, optional): Whether to save the KML file immediately. Defaults to True.
         """
 
-        # Create the KML life lines creator and add people to the KML
         self.kml_life_lines_creator = KML_Life_Lines_Creator(gedcom=gedcom, kml_file=kml_file)
         self.kml_life_lines_creator.add_people()
 
-        # Optionally connect parents with lines in the KML
         if connect_parents:
             self.kml_life_lines_creator.connect_parents()
 
-        # Optionally save the KML file immediately
         if save:
             self.kml_life_lines_creator.save_kml()
 
