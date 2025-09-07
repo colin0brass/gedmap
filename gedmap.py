@@ -2,24 +2,6 @@
 gedmap.py - Main entry point for GEDCOM geolocation and KML export.
 
 Processes GEDCOM files, geocodes places, writes summaries, and generates KML output.
-
-Workflow:
-        - load geo config (countries, substitutions, etc)
-        - load global geo cache if applicable
-        - for each input file:
-            - load gedcom file
-            - load per file alt places if applicable
-            - load per file geo cache if applicable
-            - apply geo cache to place list, by alternate address if it exists, or normal addr
-            - geolocate any remaining places that don't already have lat/lon
-            - save updated geo cache
-            - write KML output
-            - write summaries if requested
-        - other thoughts
-            - trying "rapidfuzz" for fuzzy string matching for address resolution; not yet evaluated benefit
-            - started adding "libpostal" for address parsing and normalization; not fully integrated yet
-            - consider flagging locations that were manually vs automatically geocoded
-            - consider adding a confidence score to geocoded locations
 """
 
 import argparse
