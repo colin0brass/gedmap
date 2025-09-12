@@ -217,7 +217,7 @@ class GedcomParser:
         changed = False
 
         try:
-            with open(input_path, 'r', encoding='utf-8', newline='') as infile, \
+            with open(input_path, 'r', encoding='utf-8', newline='', errors="replace") as infile, \
                 open(temp_path, 'w', encoding='utf-8', newline='') as outfile:
                 for raw in infile:
                     line = raw.rstrip('\r\n')
