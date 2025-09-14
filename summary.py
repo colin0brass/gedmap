@@ -30,7 +30,7 @@ def write_places_summary(args: Namespace, address_book: FuzzyAddressBook, output
         output_file (str): Output CSV file path.
     """
     try:
-        with open(output_file, 'w', newline='') as csvfile:
+        with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
             csv_header = [
                 'count', 'latitude', 'longitude', 'found_country',
                 'place', 'country_name', 'continent'
@@ -85,7 +85,7 @@ def write_people_summary(args: Namespace, people: Dict[str, Any], output_file: s
         })
 
     try:
-        with open(output_file, 'w', newline='') as csvfile:
+        with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
             csv_writer = csv.writer(csvfile, dialect='excel')
             csv_writer.writerow(['ID', 'Name', 'birth_place', 'birth_alt_addr', 'birth_date', 'birth_country', 'birth_continent', 'death_place', 'death_alt_addr', 'death_date', 'death_country', 'death_continent'])
             for summary in people_summary:
@@ -362,7 +362,7 @@ def write_birth_death_countries_summary(args: Namespace, people: Dict[str, Any],
         birth_death_countries_summary[key]['death_continent'] = death_country_continent
 
     try:
-        with open(output_file, 'w', newline='') as csvfile:
+        with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
             csv_writer = csv.writer(csvfile, dialect='excel')
             csv_writer.writerow(['Birth Country', 'Birth Continent', 'Death Country', 'Death Continent', 'Count'])
             for (birth_country, death_country), data in birth_death_countries_summary.items():
@@ -396,7 +396,7 @@ def write_geocache_summary(address_book: FuzzyAddressBook, output_file: str) -> 
     df = df.drop_duplicates(subset=['address'], keep='first')
 
     try:
-        df.to_csv(output_file, index=False)
+        df.to_csv(output_file, index=False, encoding='utf-8')
     except IOError as e:
         logger.error(f"Failed to write places summary to {output_file}: {e}")
 
@@ -429,6 +429,6 @@ def write_alt_places_summary(args: Namespace, address_book: FuzzyAddressBook, ou
 
     df = pd.DataFrame(records, columns=columns)
     try:
-        df.to_csv(output_file, index=False)
+        df.to_csv(output_file, index=False, encoding='utf-8')
     except IOError as e:
         logger.error(f"Failed to write alternative places summary to {output_file}: {e}")
