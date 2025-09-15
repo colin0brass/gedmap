@@ -51,10 +51,26 @@ Using some of the sample files from gedcom-to-visualmap as above
     cd gedmap
     ```
 
-2. Install dependencies:
+2. Install libpostal as per: https://github.com/openvenues/libpostal
+
+    ```
+    # example of installing on mac (see above link for latest applicable instructions)
+    xcode-select --install
+    brew install autoconf automake libtool pkg-config
+    mkdir -p ~/git; cd ~/git
+    git clone https://github.com/openvenues/libpostal
+    cd libpostal
+    ./bootstrap.sh
+    ./configure --disable-sse2 --datadir="$HOME/.local/share"   # datadir anywhere with a few GB
+    make -j4
+    sudo make install     # installs headers & lib to /usr/local by default
+    ```
+    
+3. Install dependencies:
     ```sh
     pip install -r requirements.txt
     ```
+
 
 ## Usage
 
