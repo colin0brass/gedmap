@@ -10,4 +10,5 @@ numpy
 pyyaml
 rapidfuzz
 unidecode
-postal
+deepparse
+torch

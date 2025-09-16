@@ -5,12 +5,10 @@ Provides GeoConfig for loading continent mappings, country substitutions, and re
 geographic settings from a YAML configuration file.
 """
 
-import os
-import csv
 import yaml
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Union, Tuple
+from typing import Optional, Tuple
 
 import pycountry
 import pycountry_convert as pc
@@ -189,11 +187,11 @@ class GeoConfig:
             logger.info(f"Substituting country '{last_place_element}' with '{country_name}' in place '{place}'")
             place_lower = place_lower.replace(last_place_element, country_name)
             found = True
-
-        country_name, found_country = self.get_country_name(last_place_element)
-        if found_country:
-            logger.info(f"Found country '{country_name}' for place '{place}'")
-            found = True
+        else:
+            country_name, found_country = self.get_country_name(last_place_element)
+            if found_country:
+                logger.info(f"Found country '{country_name}' for place '{place}'")
+                found = True
 
         if not found and self.default_country.lower() != 'none':
             logger.info(f"Adding default country '{self.default_country}' to place '{place}'")

@@ -4,8 +4,6 @@ geocode.py - Geocoding utilities for GEDCOM mapping.
 Handles geocoding, country/continent lookup, canonicalization, and caching of location results.
 """
 
-import os
-import csv
 import re
 import time
 import logging
@@ -16,10 +14,9 @@ from unidecode import unidecode
 
 from geopy.geocoders import Nominatim
 
-from postal.expand import expand_address
-from postal.parser import parse_address
+from deepparse.parser import AddressParser
 
-from location import LatLon, Location
+from location import Location
 from addressbook import FuzzyAddressBook
 from geocache import GeoCache
 from geo_config import GeoConfig
@@ -33,6 +30,7 @@ class Canonical:
 
     Attributes:
         geo_config (GeoConfig): Geographic configuration instance.
+        parser (AddressParser): Deepparse address parser instance.
     """
 
     SPACE_RE = re.compile(r"\s+")
@@ -46,6 +44,7 @@ class Canonical:
             geo_config (GeoConfig, optional): GeoConfig instance with geographic data.
         """
         self.geo_config = geo_config if geo_config else GeoConfig()
+        self.parser = AddressParser(model_type="bpemb")  # or "bpemb" for more accuracy
 
     def __strip_and_norm(self, address: str) -> str:
         """
@@ -66,21 +65,21 @@ class Canonical:
 
     def __expand_variants(self, address: str, max_variants=8) -> List[str]:
         """
-        Expand address variants using libpostal.
+        Deepparse does not provide expansion variants like libpostal.
+        This returns the normalized address as a single variant.
 
         Args:
             address (str): Address string.
-            max_variants (int): Maximum number of variants to return.
+            max_variants (int): Ignored.
 
         Returns:
-            List[str]: List of expanded address variants.
+            List[str]: List with one normalized address.
         """
-        variants = list(expand_address(address))[:max_variants]
-        return variants if variants else [address]
-    
+        return [self.__strip_and_norm(address)]
+
     def __parse_address(self, address: str) -> Dict[str, str]:
         """
-        Parse an address string into its components using libpostal.
+        Parse an address string into its components using Deepparse.
 
         Args:
             address (str): Address string.
@@ -88,12 +87,17 @@ class Canonical:
         Returns:
             Dict[str, str]: Dictionary of parsed address parts.
         """
-        parsed = dict(parse_address(address))
-        return {k: self.__strip_and_norm(v) for v, k in parsed.items()}
-    
+        parsed = self.parser(address)
+        # Deepparse returns a list of Address objects; take the first
+        if parsed:
+            parts = parsed[0].to_dict()
+            # Normalize all values
+            return {k: self.__strip_and_norm(str(v)) for k, v in parts.items()}
+        return {}
+
     def __canonical_city(self, city: str) -> str:
         """
-        Returns the longest variant of the city name after stripping and normalizing.
+        Returns the normalized city name.
 
         Args:
             city (str): City name.
@@ -101,14 +105,11 @@ class Canonical:
         Returns:
             str: Canonical city name.
         """
-        city_clean = self.__strip_and_norm(city)
-        city_variants = self.__expand_variants(city_clean)
-        best_variant = max(city_variants, key=len)
-        return best_variant
-    
+        return self.__strip_and_norm(city)
+
     def __canonical_country(self, country: str) -> str:
         """
-        Returns the longest variant of the country name after stripping and normalizing.
+        Returns the normalized country name.
 
         Args:
             country (str): Country name.
@@ -116,11 +117,8 @@ class Canonical:
         Returns:
             str: Canonical country name.
         """
-        country_clean = self.__strip_and_norm(country)
-        country_variants = self.__expand_variants(country_clean)
-        best_variant = max(country_variants, key=len)
-        return best_variant
-    
+        return self.__strip_and_norm(country)
+
     def __canonicalise_parts(self, parts: Dict[str, str]) -> Tuple[Dict[str, str], str]:
         """
         Canonicalize address parts and construct a canonical address string.
@@ -136,7 +134,7 @@ class Canonical:
         canonical_parts['city'] = self.__canonical_city(canonical_parts.get('city', ''))
         canonical_parts['country'] = self.__canonical_country(canonical_parts.get('country', ''))
         segments = list(canonical_parts.values())
-        segments = [s for i,s in enumerate(segments) if s and s not in segments[:i]]
+        segments = [s for i, s in enumerate(segments) if s and s not in segments[:i]]
         canonical_address = ', '.join(segments)
         return canonical_parts, canonical_address
 
@@ -331,6 +329,9 @@ class Geocode:
 
         if not place:
             return None
+        
+        if place == 'Livadia,Crimea,Near Yalta,Russia':
+            logger.info("Debug breakpoint")
 
         use_place_name = place
         cache_entry = None
