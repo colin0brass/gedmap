@@ -2,15 +2,18 @@
 geocache.py - Geocoded location cache utilities for GEDCOM mapping.
 
 Handles reading and saving geocoded location cache as CSV.
+
+Author: @colin0brass
 """
 
 import os
 import csv
 import logging
 from pathlib import Path
+import time
 from typing import Dict, Optional, Tuple
 
-from location import Location
+from .location import Location
 
 logger = logging.getLogger(__name__)
 
@@ -196,8 +199,8 @@ class GeoCache:
         self.geo_cache[address] = {
             'address': address,
             'alt_addr': getattr(location, 'alt_addr', ''),
-            'latitude': getattr(location.lat_lon, 'lat', ''),
-            'longitude': getattr(location.lat_lon, 'lon', ''),
+            'latitude': getattr(location.latlon, 'lat', ''),
+            'longitude': getattr(location.latlon, 'lon', ''),
             'country_code': location.country_code,
             'country_name': location.country_name,
             'continent': location.continent,

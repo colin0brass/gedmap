@@ -1,14 +1,20 @@
 """
-addressbook.py - FuzzyAddressBook for GEDCOM mapping.
+addressbook.py - FuzzyAddressBook for geo_gedcom mapping.
 
-Provides a class for storing, managing, and fuzzy-matching geocoded addresses.
+Defines the FuzzyAddressBook class for storing, managing, and fuzzy-matching geocoded addresses and locations.
+Supports summary reporting and integration with Location and LatLon classes.
+
+Module: geo_gedcom.addressbook
+Author: @colin0brass
+Last updated: 2025-11-29
 """
 
 import logging
 from typing import Any, Dict, Optional, Union, List
 from rapidfuzz import process, fuzz
 
-from location import LatLon, Location
+from .location import Location
+from .lat_lon import LatLon
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +55,9 @@ class FuzzyAddressBook:
         if location is None:
             return {}
         row = {col: getattr(location, col, None) for col in self.summary_columns}
-        if location.lat_lon:
-            row['latitude'] = location.lat_lon.lat
-            row['longitude'] = location.lat_lon.lon
+        if location.latlon:
+            row['latitude'] = location.latlon.lat
+            row['longitude'] = location.latlon.lon
         else:
             row['latitude'] = None
             row['longitude'] = None

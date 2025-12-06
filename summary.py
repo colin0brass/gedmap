@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from addressbook import FuzzyAddressBook
+from geo_gedcom.addressbook import FuzzyAddressBook
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +41,8 @@ def write_places_summary(args: Namespace, address_book: FuzzyAddressBook, output
             csv_writer.writerow(csv_header)
             for place, location in address_book.addresses().items():
                 # location = data.get('location', None)
-                latitude = getattr(location.lat_lon, 'lat', '') if location and getattr(location, 'lat_lon', None) else ''
-                longitude = getattr(location.lat_lon, 'lon', '') if location and getattr(location, 'lat_lon', None) else ''
+                latitude = getattr(location.latlon, 'lat', '') if location and getattr(location, 'latlon', None) else ''
+                longitude = getattr(location.latlon, 'lon', '') if location and getattr(location, 'latlon', None) else ''
                 found_country = getattr(location, 'found_country', '') if location else ''
                 country_name = getattr(location, 'country_name', '') if location else ''
                 continent = getattr(location, 'continent', '') if location else ''
@@ -76,12 +76,12 @@ def write_people_summary(args: Namespace, people: Dict[str, Any], output_file: s
             'Name': person.name,
             'birth_place': birth_place,
             'birth_alt_addr': getattr(getattr(person.birth, 'location', None), 'alt_addr', '') if person.birth else '',
-            'birth_date': person.birth.date_year() if person.birth else '',
+            'birth_date': person.birth.date.year_num if person.birth else '',
             'birth_country': getattr(getattr(person.birth, 'location', None), 'country_name', '') if person.birth else '',
             'birth_continent': birth_continent,
             'death_place': person.death.place if person.death else '',
             'death_alt_addr': getattr(getattr(person.death, 'location', None), 'alt_addr', '') if person.death else '',
-            'death_date': person.death.date_year() if person.death else '',
+            'death_date': person.death.date.year_num if person.death else '',
             'death_country': getattr(getattr(person.death, 'location', None), 'country_name', '') if person.death else '',
             'death_continent': getattr(getattr(person.death, 'location', None), 'continent', '') if person.death else ''
         })

@@ -26,8 +26,9 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from geo_gedcom import Geocode
-from geo_gedcom import GeolocatedGedcom
+from geo_gedcom.geocode import Geocode
+from geo_gedcom.geolocated_gedcom import GeolocatedGedcom
+
 from kml import KML_Life_Lines
 from summary import (
     write_places_summary,
