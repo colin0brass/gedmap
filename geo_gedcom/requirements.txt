@@ -1,3 +1,0 @@
-
-ged4py>=1.2.0
-rapidfuzz>=2.13.7
