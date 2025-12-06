@@ -1,0 +1,3 @@
+[submodule "geo_gedcom"]
+	path = geo_gedcom
+	url = git@github.com:colin0brass/geo_gedcom.git

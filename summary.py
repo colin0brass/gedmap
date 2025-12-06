@@ -11,6 +11,8 @@ from argparse import Namespace
 import os
 import pandas as pd
 import seaborn as sns
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from addressbook import FuzzyAddressBook

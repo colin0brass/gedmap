@@ -36,6 +36,9 @@ class Canonical:
     SPACE_RE = re.compile(r"\s+")
     PUNC_RE = re.compile(r"[\,;]+")
 
+    DEEPPARSE_DEVICE = "cpu"  # or "cuda" if GPU available
+    DEEPPARSE_OFFLINE = True  # Deepparse offline mode
+
     def __init__(self, geo_config: GeoConfig = None):
         """
         Initialize Canonical with country data from pycountry and optional config file.
@@ -44,7 +47,10 @@ class Canonical:
             geo_config (GeoConfig, optional): GeoConfig instance with geographic data.
         """
         self.geo_config = geo_config if geo_config else GeoConfig()
-        self.parser = AddressParser(model_type="bpemb")  # or "bpemb" for more accuracy
+        logger.info(f"Using Deepparse device: {self.DEEPPARSE_DEVICE}, offline: {self.DEEPPARSE_OFFLINE}")
+        self.parser = AddressParser(model_type="bpemb",
+                                    device=self.DEEPPARSE_DEVICE,
+                                    offline=self.DEEPPARSE_OFFLINE)
 
     def __strip_and_norm(self, address: str) -> str:
         """
