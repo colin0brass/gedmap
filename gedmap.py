@@ -66,7 +66,6 @@ def get_arg_parser() -> argparse.ArgumentParser:
         --write_all: Save all summaries.
         --verbose: Enable verbose output.
         --output_folder (str): Folder to put output files.
-        --include_canonical: Include canonical address and parts in location data.
     """
     parser = argparse.ArgumentParser(
         description='Convert GEDCOM to KML and lookup addresses',
@@ -100,8 +99,6 @@ def get_arg_parser() -> argparse.ArgumentParser:
         help='Enable verbose output')
     parser.add_argument('--output_folder', type=str, default='output',
         help='Folder to put output files (default: ./output)')
-    parser.add_argument('--include_canonical', action='store_true',
-        help='Include canonical address and parts in location data')
     return parser
 
 def main() -> None:
@@ -159,8 +156,7 @@ def main() -> None:
             always_geocode=args.always_geocode,
             alt_place_file_path=alt_place_file_path if not args.skip_file_alt_places else None,
             geo_config_path=geo_config_path if geo_config_path.exists() else None,
-            file_geo_cache_path=file_geo_cache_path if not args.skip_file_geocache else None,
-            include_canonical= args.include_canonical
+            file_geo_cache_path=file_geo_cache_path if not args.skip_file_geocache else None
         )
 
         logger.info('Saving updated geo cache...')
