@@ -39,7 +39,6 @@ Using some of the sample files from gedcom-to-visualmap as above
   - write summaries if requested
 - status and potential directions
   - trying "rapidfuzz" for fuzzy string matching for address resolution; not yet evaluated benefit
-  - started adding "libpostal" for address parsing and normalization; not fully integrated yet
   - consider flagging locations that were manually vs automatically geocoded
   - consider adding a confidence score to geocoded locations
 
