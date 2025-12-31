@@ -22,6 +22,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+import time
+
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -55,6 +57,7 @@ def get_arg_parser() -> argparse.ArgumentParser:
         input_files (str): One or more GEDCOM files to process.
         --default_country (str): Default country for geocoding.
         --always-geocode: Always geocode, ignore cache.
+        --renew_cache: Renew existing global geo-location cache.
         --geo_cache_filename (str): Geo-location cache filename to use.
         --skip_file_alt_places: Ignore alternative place names for each input file (<input_filename>_alt.csv).
         --skip_file_geocache: Ignore geo-cache for each input file (<input_filename>_cache.csv).
@@ -77,6 +80,8 @@ def get_arg_parser() -> argparse.ArgumentParser:
         help='Default country for geocoding, e.g. "England"')
     parser.add_argument('--always-geocode', action='store_true',
         help='Always geocode, ignore cache')
+    parser.add_argument('--renew_cache', action='store_true',
+        help='Renew existing global geo-location cache')
     parser.add_argument('--geo_cache_filename', type=str, default=GLOBAL_GEO_CACHE_FILENAME,
         help='Global geo-location cache filename to use')
     parser.add_argument('--skip_file_alt_places', action='store_true',
@@ -119,6 +124,7 @@ def main() -> None:
             - Write summary CSVs and visualizations.
         - Save all outputs in the specified output folder.
     """
+    start_time = time.time()
     parser = get_arg_parser()
     args = parser.parse_args()
     if not args.input_files:
@@ -149,6 +155,9 @@ def main() -> None:
         global_geo_cache_path = input_path.parent / args.geo_cache_filename
         alt_place_file_path = input_path.parent / f"{base_file_name}{FILE_ALT_PLACE_FILENAME_SUFFIX}"
         file_geo_cache_path = input_path.parent / f"{base_file_name}{FILE_GEOCACHE_FILENAME_SUFFIX}"
+        if args.renew_cache and global_geo_cache_path.exists():
+            logger.info(f'Renewing global geo-location cache: {global_geo_cache_path}')
+            global_geo_cache_path.unlink()
         my_gedcom = GeolocatedGedcom(
             gedcom_file=input_path.resolve(),
             location_cache_file=global_geo_cache_path,
@@ -197,6 +206,19 @@ def main() -> None:
             alt_places_summary_file = alt_places_summary_file.resolve()
             logger.info(f"Writing alternative places summary to {alt_places_summary_file}")
             write_alt_places_summary(args, my_gedcom.address_book, str(alt_places_summary_file))
+
+    end_time = time.time()
+    elapsed = end_time - start_time
+    hours = int(elapsed // 3600)
+    minutes = int((elapsed % 3600) // 60)
+    seconds = elapsed % 60
+    time_str = "\nTotal run time: "
+    if hours:
+        time_str += f"{hours}h "
+    if hours or minutes:
+        time_str += f"{minutes}m "
+    time_str += f"{seconds:.2f}s"
+    print(time_str)
 
 if __name__ == "__main__":
     try:

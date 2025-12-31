@@ -69,8 +69,6 @@ def write_people_summary(args: Namespace, people: Dict[str, Any], output_file: s
     for person_id, person in people.items():
         birth_place = person.birth.place if person.birth else ''
         birth_continent = getattr(getattr(person.birth, 'location', None), 'continent', '') if person.birth else ''
-        if birth_place and not birth_continent:
-            logger.warning(f"Birth continent not found for {person.name}; place: {birth_place}; continent: {birth_continent}")
         people_summary.append({
             'ID': person_id,
             'Name': person.name,

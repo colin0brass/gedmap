@@ -286,7 +286,6 @@ class KML_Life_Lines_Creator:
         """
         line_type = 'Parents'
         for person_id, person in self.gedcom.people.items():
-            logger.info(f'person: {person}')
             if person.latlon and person.latlon.is_valid():
                 begin_date = person.birth.date.year_num if person.birth and person.birth.date else None
 
