@@ -2,12 +2,13 @@
 summary.py - Functions for writing summary CSVs and visualizations for GEDCOM geolocation.
 
 Contains functions to write places, people, country summaries, and birth/death heatmaps.
+
+Author: @colin0brass
 """
 
 import csv
 import logging
 from typing import Dict, Any
-from argparse import Namespace
 import os
 import pandas as pd
 import seaborn as sns
@@ -18,8 +19,11 @@ import matplotlib.pyplot as plt
 from geo_gedcom.addressbook import FuzzyAddressBook
 
 logger = logging.getLogger(__name__)
+# Avoid using any interactive backends
+matplotlib.use("Agg")
 
-def write_places_summary(args: Namespace, address_book: FuzzyAddressBook, output_file: str) -> None:
+
+def write_places_summary(address_book: FuzzyAddressBook, output_file: str) -> None:
     """
     Write a summary of all geolocated places to a CSV file.
 
@@ -54,7 +58,7 @@ def write_places_summary(args: Namespace, address_book: FuzzyAddressBook, output
     except IOError as e:
         logger.error(f"Failed to write places summary to {output_file}: {e}")
 
-def write_people_summary(args: Namespace, people: Dict[str, Any], output_file: str) -> None:
+def write_people_summary(people: Dict[str, Any], output_file: str) -> None:
     """
     Write a summary of all people to a CSV file.
 
@@ -67,21 +71,26 @@ def write_people_summary(args: Namespace, people: Dict[str, Any], output_file: s
     """
     people_summary = []
     for person_id, person in people.items():
-        birth_place = person.birth.place if person.birth else ''
-        birth_continent = getattr(getattr(person.birth, 'location', None), 'continent', '') if person.birth else ''
+        birth_event = person.get_event('birth') if person else None
+        death_event = person.get_event('death') if person else None
+
+        birth_place = birth_event.place if birth_event else ''
+        birth_continent = getattr(getattr(birth_event, 'location', None), 'continent', '') if birth_event else ''
+        if birth_place and not birth_continent:
+            logger.warning(f"Birth continent not found for {person.name}; place: {birth_place}; continent: {birth_continent}")
         people_summary.append({
             'ID': person_id,
             'Name': person.name,
             'birth_place': birth_place,
-            'birth_alt_addr': getattr(getattr(person.birth, 'location', None), 'alt_addr', '') if person.birth else '',
-            'birth_date': person.birth.date.year_num if person.birth else '',
-            'birth_country': getattr(getattr(person.birth, 'location', None), 'country_name', '') if person.birth else '',
+            'birth_alt_addr': getattr(getattr(birth_event, 'location', None), 'alt_addr', '') if birth_event else '',
+            'birth_date': birth_event.date.year_num if birth_event else '',
+            'birth_country': getattr(getattr(birth_event, 'location', None), 'country_name', '') if birth_event else '',
             'birth_continent': birth_continent,
-            'death_place': person.death.place if person.death else '',
-            'death_alt_addr': getattr(getattr(person.death, 'location', None), 'alt_addr', '') if person.death else '',
-            'death_date': person.death.date.year_num if person.death else '',
-            'death_country': getattr(getattr(person.death, 'location', None), 'country_name', '') if person.death else '',
-            'death_continent': getattr(getattr(person.death, 'location', None), 'continent', '') if person.death else ''
+            'death_place': death_event.place if death_event else '',
+            'death_alt_addr': getattr(getattr(death_event, 'location', None), 'alt_addr', '') if death_event else '',
+            'death_date': death_event.date.year_num if death_event else '',
+            'death_country': getattr(getattr(death_event, 'location', None), 'country_name', '') if death_event else '',
+            'death_continent': getattr(getattr(death_event, 'location', None), 'continent', '') if death_event else ''
         })
 
     try:
@@ -329,7 +338,7 @@ def save_birth_death_heatmap_matrix(birth_death_countries_summary: Dict[Any, Any
     plt.savefig(output_image_file)
     plt.close()
 
-def write_birth_death_countries_summary(args: Namespace, people: Dict[str, Any], output_file: str, gedcom_file_name: str) -> None:
+def write_birth_death_countries_summary( people: Dict[str, Any], output_file: str, gedcom_file_name: str) -> None:
     """
     Write a summary of birth and death countries to a CSV file.
 
@@ -344,8 +353,10 @@ def write_birth_death_countries_summary(args: Namespace, people: Dict[str, Any],
     birth_death_countries_summary = {}
 
     for person_id, person in people.items():
-        birth_location = getattr(person.birth, 'location', None) if person.birth else None
-        death_location = getattr(person.death, 'location', None) if person.death else None
+        birth_event = person.get_event('birth') if person else None
+        death_event = person.get_event('death') if person else None
+        birth_location = getattr(birth_event, 'location', None) if birth_event else None
+        death_location = getattr(death_event, 'location', None) if death_event else None
 
         birth_country = getattr(birth_location, 'country_name', 'none') if birth_location else 'none'
         birth_country_continent = getattr(birth_location, 'continent', 'none') if birth_location else 'none'
@@ -373,6 +384,7 @@ def write_birth_death_countries_summary(args: Namespace, people: Dict[str, Any],
     output_image_file = os.path.splitext(output_file)[0] + "_heatmap.png"
     save_birth_death_heatmap_matrix(birth_death_countries_summary, output_image_file, gedcom_file_name)
     logger.info(f"Saved heatmap matrix image to {output_image_file}")
+    return output_image_file
 
 def write_geocache_summary(address_book: FuzzyAddressBook, output_file: str) -> None:
     """
@@ -400,7 +412,7 @@ def write_geocache_summary(address_book: FuzzyAddressBook, output_file: str) -> 
     except IOError as e:
         logger.error(f"Failed to write places summary to {output_file}: {e}")
 
-def write_alt_places_summary(args: Namespace, address_book: FuzzyAddressBook, output_file: str) -> None:
+def write_alt_places_summary(address_book: FuzzyAddressBook, output_file: str) -> None:
     """
     Write a summary of all alternative place names to a CSV file.
 

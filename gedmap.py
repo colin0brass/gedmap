@@ -181,19 +181,19 @@ def main() -> None:
             places_summary_file = output_folder / f"{base_file_name}_places.csv"
             places_summary_file = places_summary_file.resolve()
             logger.info(f"Writing places summary to {places_summary_file}")
-            write_places_summary(args, my_gedcom.address_book, str(places_summary_file))
+            write_places_summary(my_gedcom.address_book, str(places_summary_file))
 
         if args.write_people_summary or args.write_all:
             people_summary_file = output_folder / f"{base_file_name}_people.csv"
             people_summary_file = people_summary_file.resolve()
             logger.info(f"Writing people summary to {people_summary_file}")
-            write_people_summary(args, my_gedcom.people, str(people_summary_file))
+            write_people_summary(my_gedcom.people, str(people_summary_file))
 
         if args.write_countries_summary or args.write_all:
             countries_summary_file = output_folder / f"{base_file_name}_countries.csv"
             countries_summary_file = countries_summary_file.resolve()
             logger.info(f"Writing countries summary to {countries_summary_file}")
-            write_birth_death_countries_summary(args, my_gedcom.people, str(countries_summary_file), base_file_name)
+            write_birth_death_countries_summary(my_gedcom.people, str(countries_summary_file), base_file_name)
 
         if args.write_geocache_per_input_file or args.write_all:
             per_file_cache = output_folder / f"{base_file_name}{FILE_GEOCACHE_FILENAME_SUFFIX}"
@@ -205,7 +205,7 @@ def main() -> None:
             alt_places_summary_file = output_folder / f"{base_file_name}_alt_places.csv"
             alt_places_summary_file = alt_places_summary_file.resolve()
             logger.info(f"Writing alternative places summary to {alt_places_summary_file}")
-            write_alt_places_summary(args, my_gedcom.address_book, str(alt_places_summary_file))
+            write_alt_places_summary(my_gedcom.address_book, str(alt_places_summary_file))
 
     end_time = time.time()
     elapsed = end_time - start_time
